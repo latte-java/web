@@ -1,40 +1,38 @@
 Basic example:
 
 ```java
-import module org.lattejava.mvc;
+import module org.lattejava.web;
 
-MVC mvc = new MVC();
-Router router = new Router(); // Middleware
+Web web = new Web();
 Security security = new AuthorizationSecurity("api-key"); // Middleware
 Bodies bodies = new Bodies();
 
 void main() {
-  mvc.install(security); // Global protection
-  mvc.install(router);
+  web.install(security); // Global protection
   
   // Method reference
-  router.get("/", this::getSlash);
+  web.get("/", this::getSlash);
   
   // Inline lambda
-  router.get("/foo", (req, res) -> {
+  web.get("/foo", (req, res) -> {
     res.setStatus(200);
     res.getWriter().write("Hello Foo");
   });
   
   // Handling JSON
-  router.post("/api/user/{id}", this::createUser, bodies.fromJSON(User.class));
+  web.post("/api/user/{id}", this::createUser, bodies.fromJSON(User.class));
   
   // Middleware injection
-  router.post("/api/foo", security, this::foo);
+  web.post("/api/foo", security, this::foo);
   
   // Grouping
-  router.group("/api", security, r -> {
+  web.group("/api", security, r -> {
     r.get("/user", this::getUser);
     r.get("/foo", this::getFoo);
   });
 
-  mvc.start(8001);
-  mvc.daemon(); // Runs until the JVM is sent a signal such as QUIT or KILL
+  web.start(8001);
+  web.daemon(); // Runs until the JVM is sent a signal such as QUIT or KILL
 }
 
 void getSlash(HTTPRequest req, HTTPResponse res) {
@@ -84,20 +82,14 @@ public interface MiddlewareChain {
 Possible methods:
 
 ```java
-public class Router {
-  Router route(String pathSpec, Handler handler) {
+public class Web {
+  Web route(String pathSpec, Handler handler, Middleware... middlewares) {
   }
 
-  Router route(String pathSpec, BodyHandler<T> handler, BodySupplier<T> handler) {
+  Web route(String pathSpec, BodyHandler<T> handler, BodySupplier<T> handler, Middleware... middlewares) {
   }
 
-  Router route(String pathSpec, Middleware middleware, Handler handler) {
-  }
-
-  Router route(String pathSpec, Middleware middleware, BodyHandler<T> handler, BodySupplier<T> handler) {
-  }
-
-  Router group(String pathSpec, Middleware middleware, Consumer<Router> group) {
+  Web group(String pathSpec, Consumer<Router> group, Middleware... middlewares) {
   }
 }
 
