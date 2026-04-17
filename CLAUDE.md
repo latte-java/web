@@ -24,15 +24,30 @@ Java 25. Uses the Java module system (`module-info.java`).
 
 ## Architecture
 
-The framework is minimal — two public types in `org.lattejava.web`:
+Two packages:
 
-- **`Web`** — main entry point. Registers routes via `route(pathSpec, handler)`, starts an HTTP server via `start(port)`. Routes are matched in registration order using regex compiled from path specs. Path parameters use `{name}` syntax and are set as request attributes. Returns 404 if no route matches.
-- **`Handler`** — `@FunctionalInterface` with signature `void handle(HTTPRequest req, HTTPResponse res) throws Exception`. Supports lambdas.
+- `org.lattejava.web` (exported) — public API: `Web` and `Handler`
+- `org.lattejava.web.internal` (not exported) — implementation: `PathParser`, `RouteTrie`
 
-The `Web` class wraps `HTTPServer` from the `org.lattejava.http` module. The inner `Route` class converts path specs like `/api/user/{id}` into regex patterns and extracts parameter names.
+### Public API
+
+- **`Web`** — fluent entry point. Register routes via `route(methods, pathSpec, handler)` or per-verb shortcuts (`get`, `post`, `put`, `delete`, `patch`, `head`, `options`). Group routes with `prefix(pathPrefix, consumer)` (nestable, returns parent for chaining). Start the server with `start(port)` and close via `close()` (or try-with-resources — `Web implements Closeable`). Registration is locked after `start()`; a JVM shutdown hook is auto-registered to close the server on exit.
+- **`Handler`** — `@FunctionalInterface` with signature `void handle(HTTPRequest req, HTTPResponse res) throws Exception`. Supports lambdas and method references.
+
+### Routing
+
+- **`RouteTrie`** — segment-level trie. Each node has a `Map<String, Node> staticChildren` (keyed by literal segment text), a single `paramChild` for `{name}` patterns, and a `Map<String, Handler> handlersByMethod` at terminal nodes. Matching is O(path_length) with backtracking: static children are checked before the param child (literal beats param structurally, no scoring). When a terminal matches but the method doesn't, the matcher falls through to the param branch so `/users/new` (GET) and `/users/{id}` (POST) can coexist. Allow-header method sets are unioned across all path-matching branches.
+- **`PathParser`** — character-by-character FSM that validates pathSpec and returns a `List<Segment>` (sealed: `Literal(String)` / `Param(String)`). Enforces RFC 3986 pchar minus `%` for literal characters, Java-identifier rules for parameter names, and rejects duplicate parameter names.
+- Returns **404** when no route matches the path, **405** (with aggregated `Allow` header) when a route matches the path but not the method. Path parameters are set as request attributes via `req.getAttribute(name)`.
+
+### Lifecycle
+
+- `start(port)` only succeeds once (`AtomicBoolean started`). Shared between parent and child `Web` (created via `prefix()`) so registration is locked globally after start.
+- `close()` is idempotent; concurrent-safe via `AtomicReference<HTTPServer>`.
 
 ## Conventions
 
 - License header on all source files (MIT, Latte Java, 2025-2026)
 - Fluent API with method chaining
 - Tests use TestNG (not JUnit)
+- Topic-specific code rules are in `.claude/rules/` (auto-loaded)
