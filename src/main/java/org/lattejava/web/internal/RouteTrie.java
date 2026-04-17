@@ -8,6 +8,7 @@ package org.lattejava.web.internal;
 import java.util.*;
 
 import org.lattejava.web.Handler;
+import org.lattejava.web.Middleware;
 
 /**
  * A segment-level trie for O(path_length) route matching.
@@ -25,13 +26,14 @@ public class RouteTrie {
   /**
    * Inserts a route into the trie.
    *
-   * @param pathSpec the path specification (e.g., {@code /api/users/{id}})
-   * @param methods  the HTTP methods this route handles
-   * @param handler  the handler to invoke
+   * @param pathSpec    the path specification (e.g., {@code /api/users/{id}})
+   * @param methods     the HTTP methods this route handles
+   * @param handler     the handler to invoke
+   * @param middlewares the per-route middlewares to run before the handler
    * @throws IllegalArgumentException if the pathSpec is invalid or contains duplicate param names
    * @throws IllegalStateException    if conflicting parameter names exist at the same trie position
    */
-  public void insert(String pathSpec, Collection<String> methods, Handler handler) {
+  public void insert(String pathSpec, Collection<String> methods, Handler handler, List<Middleware> middlewares) {
     var segments = PathParser.parse(pathSpec);
     Node node = root;
 
@@ -54,16 +56,17 @@ public class RouteTrie {
     }
 
     // At terminal node — register methods
-    if (node.handlersByMethod == null) {
-      node.handlersByMethod = new LinkedHashMap<>();
+    if (node.entriesByMethod == null) {
+      node.entriesByMethod = new LinkedHashMap<>();
     }
+    RouteEntry entry = new RouteEntry(handler, List.copyOf(middlewares));
     for (String method : methods) {
       String upper = method.toUpperCase(Locale.ROOT);
-      if (node.handlersByMethod.containsKey(upper)) {
+      if (node.entriesByMethod.containsKey(upper)) {
         throw new IllegalStateException(
             "Duplicate route registration for method [" + upper + "] on pathSpec [" + pathSpec + "]");
       }
-      node.handlersByMethod.put(upper, handler);
+      node.entriesByMethod.put(upper, entry);
     }
   }
 
@@ -93,14 +96,14 @@ public class RouteTrie {
                                  Map<String, String> params, String method) {
     if (idx == segments.length) {
       // End of path — check for terminal handler
-      if (node.handlersByMethod == null || node.handlersByMethod.isEmpty()) {
+      if (node.entriesByMethod == null || node.entriesByMethod.isEmpty()) {
         return Outcome.NotFound.INSTANCE;
       }
-      Handler handler = node.handlersByMethod.get(method);
-      if (handler != null) {
-        return new Outcome.Found(handler, Map.copyOf(params));
+      RouteEntry entry = node.entriesByMethod.get(method);
+      if (entry != null) {
+        return new Outcome.Found(entry.handler(), entry.middlewares(), Map.copyOf(params));
       }
-      return new Outcome.MethodNotAllowed(Collections.unmodifiableSet(new LinkedHashSet<>(node.handlersByMethod.keySet())));
+      return new Outcome.MethodNotAllowed(Collections.unmodifiableSet(new LinkedHashSet<>(node.entriesByMethod.keySet())));
     }
 
     String segment = segments[idx];
@@ -147,6 +150,11 @@ public class RouteTrie {
   }
 
   /**
+   * Pairs a handler with its per-route middlewares.
+   */
+  public record RouteEntry(Handler handler, List<Middleware> middlewares) {}
+
+  /**
    * The result of a route match.
    */
   public sealed interface Outcome permits Outcome.Found, Outcome.MethodNotAllowed, Outcome.NotFound {
@@ -154,7 +162,7 @@ public class RouteTrie {
       INSTANCE
     }
 
-    record Found(Handler handler, Map<String, String> pathParams) implements Outcome {
+    record Found(Handler handler, List<Middleware> middlewares, Map<String, String> pathParams) implements Outcome {
     }
 
     record MethodNotAllowed(Set<String> allowedMethods) implements Outcome {
@@ -163,7 +171,7 @@ public class RouteTrie {
 
   static class Node {
     // terminal data; null on internal nodes; lazy-init
-    Map<String, Handler> handlersByMethod;
+    Map<String, RouteEntry> entriesByMethod;
 
     // single {name} child; lazy-init
     Node paramChild;

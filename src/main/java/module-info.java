@@ -1,5 +1,5 @@
 module org.lattejava.web {
-  requires org.lattejava.http;
   requires java.net.http;
+  requires org.lattejava.http;
   exports org.lattejava.web;
 }
