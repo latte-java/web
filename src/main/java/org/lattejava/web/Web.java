@@ -5,23 +5,10 @@
  */
 package org.lattejava.web;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import module java.base;
+import module org.lattejava.http;
 
-import org.lattejava.http.server.HTTPListenerConfiguration;
-import org.lattejava.http.server.HTTPRequest;
-import org.lattejava.http.server.HTTPResponse;
-import org.lattejava.http.server.HTTPServer;
-import org.lattejava.web.internal.MiddlewareChainImpl;
-import org.lattejava.web.internal.RouteTrie;
+import org.lattejava.web.internal.*;
 
 /**
  * A lightweight web framework built on top of the Latte Java HTTP server.
@@ -30,18 +17,12 @@ import org.lattejava.web.internal.RouteTrie;
  */
 @SuppressWarnings("UnusedReturnValue")
 public class Web implements AutoCloseable {
-  private final boolean isChild;
-
-  private final String pathPrefix;
-
-  private final AtomicBoolean started;
-
-  private final RouteTrie trie;
-
   private final List<Middleware> globalMiddlewares;
-
+  private final boolean isChild;
+  private final String pathPrefix;
+  private final AtomicBoolean started;
+  private final RouteTrie trie;
   private HTTPServer server;
-
   private Thread shutdownHook;
 
   public Web() {
@@ -58,6 +39,20 @@ public class Web implements AutoCloseable {
     this.trie = trie;
     this.started = started;
     this.globalMiddlewares = globalMiddlewares;
+  }
+
+  private static boolean isValidMethodToken(String method) {
+    int len = method.length();
+    if (len == 0) {
+      return false;
+    }
+    for (int i = 0; i < len; i++) {
+      char c = method.charAt(i);
+      if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -94,8 +89,21 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Registers global middlewares that run for every matched request, in registration order, before
-   * any per-route middlewares and the handler. Multiple calls append to the existing list.
+   * Registers a route that responds to GET requests on the given path.
+   *
+   * @param pathSpec    The path pattern to match (e.g., {@code /api/user/{id}}).
+   * @param handler     The handler to invoke when the route matches.
+   * @param middlewares Zero or more per-route middlewares to run before the handler.
+   * @return This Web instance for chaining.
+   * @see #route(Collection, String, Handler, Middleware...)
+   */
+  public Web get(String pathSpec, Handler handler, Middleware... middlewares) {
+    return route(List.of("GET"), pathSpec, handler, middlewares);
+  }
+
+  /**
+   * Registers global middlewares that run for every matched request, in registration order, before any per-route
+   * middlewares and the handler. Multiple calls append to the existing list.
    * <p>
    * Must be called before {@link #start(int)}.
    *
@@ -116,32 +124,6 @@ public class Web implements AutoCloseable {
     }
     Collections.addAll(globalMiddlewares, middlewares);
     return this;
-  }
-
-  /**
-   * Registers a route that responds to GET requests on the given path.
-   *
-   * @param pathSpec    The path pattern to match (e.g., {@code /api/user/{id}}).
-   * @param handler     The handler to invoke when the route matches.
-   * @param middlewares Zero or more per-route middlewares to run before the handler.
-   * @return This Web instance for chaining.
-   * @see #route(Collection, String, Handler, Middleware...)
-   */
-  public Web get(String pathSpec, Handler handler, Middleware... middlewares) {
-    return route(List.of("GET"), pathSpec, handler, middlewares);
-  }
-
-  /**
-   * Registers a route that responds to HEAD requests on the given path.
-   *
-   * @param pathSpec    The path pattern to match.
-   * @param handler     The handler to invoke when the route matches.
-   * @param middlewares Zero or more per-route middlewares to run before the handler.
-   * @return This Web instance for chaining.
-   * @see #route(Collection, String, Handler, Middleware...)
-   */
-  public Web head(String pathSpec, Handler handler, Middleware... middlewares) {
-    return route(List.of("HEAD"), pathSpec, handler, middlewares);
   }
 
   /**
@@ -171,6 +153,21 @@ public class Web implements AutoCloseable {
   }
 
   /**
+   * Registers a route that responds to PATCH requests on the given path, parsing the body with the given supplier.
+   *
+   * @param <T>         The type of the parsed body.
+   * @param pathSpec    The path pattern to match.
+   * @param bodyHandler The handler to invoke with the parsed body when the route matches.
+   * @param supplier    The supplier that parses the request body.
+   * @param middlewares Zero or more per-route middlewares to run before the handler.
+   * @return This Web instance for chaining.
+   * @see #route(Collection, String, BodyHandler, BodySupplier, Middleware...)
+   */
+  public <T> Web patch(String pathSpec, BodyHandler<T> bodyHandler, BodySupplier<T> supplier, Middleware... middlewares) {
+    return route(List.of("PATCH"), pathSpec, bodyHandler, supplier, middlewares);
+  }
+
+  /**
    * Registers a route that responds to POST requests on the given path.
    *
    * @param pathSpec    The path pattern to match.
@@ -184,8 +181,23 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Groups routes under a common path prefix. Routes registered inside the callback have the prefix prepended.
-   * Prefixes nest when called inside another prefix callback.
+   * Registers a route that responds to POST requests on the given path, parsing the body with the given supplier.
+   *
+   * @param <T>         The type of the parsed body.
+   * @param pathSpec    The path pattern to match.
+   * @param bodyHandler The handler to invoke with the parsed body when the route matches.
+   * @param supplier    The supplier that parses the request body.
+   * @param middlewares Zero or more per-route middlewares to run before the handler.
+   * @return This Web instance for chaining.
+   * @see #route(Collection, String, BodyHandler, BodySupplier, Middleware...)
+   */
+  public <T> Web post(String pathSpec, BodyHandler<T> bodyHandler, BodySupplier<T> supplier, Middleware... middlewares) {
+    return route(List.of("POST"), pathSpec, bodyHandler, supplier, middlewares);
+  }
+
+  /**
+   * Groups routes under a common path prefix. Routes registered inside the callback have the prefix prepended. Prefixes
+   * nest when called inside another prefix callback.
    *
    * @param newPrefix The prefix to prepend to all routes in the group.
    * @param group     A consumer that receives a Web instance scoped to the prefix.
@@ -213,6 +225,21 @@ public class Web implements AutoCloseable {
    */
   public Web put(String pathSpec, Handler handler, Middleware... middlewares) {
     return route(List.of("PUT"), pathSpec, handler, middlewares);
+  }
+
+  /**
+   * Registers a route that responds to PUT requests on the given path, parsing the body with the given supplier.
+   *
+   * @param <T>         The type of the parsed body.
+   * @param pathSpec    The path pattern to match.
+   * @param bodyHandler The handler to invoke with the parsed body when the route matches.
+   * @param supplier    The supplier that parses the request body.
+   * @param middlewares Zero or more per-route middlewares to run before the handler.
+   * @return This Web instance for chaining.
+   * @see #route(Collection, String, BodyHandler, BodySupplier, Middleware...)
+   */
+  public <T> Web put(String pathSpec, BodyHandler<T> bodyHandler, BodySupplier<T> supplier, Middleware... middlewares) {
+    return route(List.of("PUT"), pathSpec, bodyHandler, supplier, middlewares);
   }
 
   /**
@@ -261,6 +288,34 @@ public class Web implements AutoCloseable {
   }
 
   /**
+   * Registers a route that matches the given HTTP methods on the given path, parsing the body with the given supplier.
+   * <p>
+   * The supplier is called after any middlewares. If the supplier returns {@code null}, it signals a handled error
+   * condition (e.g., the supplier already set a 400 status); the body handler is short-circuited and not invoked.
+   *
+   * @param <T>         The type of the parsed body.
+   * @param methods     The HTTP methods this route responds to (e.g., {@code List.of("POST", "PUT")}).
+   * @param pathSpec    The path pattern to match (e.g., {@code /api/user/{id}}).
+   * @param bodyHandler The handler to invoke with the parsed body when the route matches.
+   * @param supplier    The supplier that parses the request body.
+   * @param middlewares Zero or more per-route middlewares to run before the handler.
+   * @return This Web instance for chaining.
+   */
+  public <T> Web route(Collection<String> methods, String pathSpec, BodyHandler<T> bodyHandler, BodySupplier<T> supplier, Middleware... middlewares) {
+    Objects.requireNonNull(bodyHandler, "bodyHandler cannot be null");
+    Objects.requireNonNull(supplier, "supplier cannot be null");
+    Handler adapted = (req, res) -> {
+      T body = supplier.get(req, res);
+      if (body == null) {
+        // Supplier signalled a handled error (e.g., set 400 status and returned null)
+        return;
+      }
+      bodyHandler.handle(req, res, body);
+    };
+    return route(methods, pathSpec, adapted, middlewares);
+  }
+
+  /**
    * Starts the HTTP server on the given port.
    *
    * @param port The port to listen on.
@@ -274,10 +329,7 @@ public class Web implements AutoCloseable {
       throw new IllegalStateException("Web has already been started");
     }
 
-    HTTPServer newServer = new HTTPServer()
-        .withHandler(this::handleRequest)
-        .withListener(new HTTPListenerConfiguration(port))
-        .start();
+    HTTPServer newServer = new HTTPServer().withHandler(this::handleRequest).withListener(new HTTPListenerConfiguration(port)).start();
 
     Thread hook;
     try {
@@ -293,20 +345,6 @@ public class Web implements AutoCloseable {
     shutdownHook = hook;
     started.set(true);
     return this;
-  }
-
-  private static boolean isValidMethodToken(String method) {
-    int len = method.length();
-    if (len == 0) {
-      return false;
-    }
-    for (int i = 0; i < len; i++) {
-      char c = method.charAt(i);
-      if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) {
-        return false;
-      }
-    }
-    return true;
   }
 
   private void closeServer() {
@@ -344,7 +382,7 @@ public class Web implements AutoCloseable {
         response.setStatus(405);
         response.setHeader("Allow", String.join(", ", allowedMethods));
       }
-      case RouteTrie.Outcome.NotFound __ -> response.setStatus(404);
+      case RouteTrie.Outcome.NotFound _ -> response.setStatus(404);
     }
   }
 }

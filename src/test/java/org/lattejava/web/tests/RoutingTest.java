@@ -416,17 +416,6 @@ public class RoutingTest extends BaseWebTest {
   }
 
   @Test
-  public void head() throws Exception {
-    try (var web = new Web()) {
-      web.head("/test", (_, res) -> res.setStatus(205));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("HEAD", "/test");
-      assertEquals(response.statusCode(), 205);
-    }
-  }
-
-  @Test
   public void options() throws Exception {
     try (var web = new Web()) {
       web.options("/test", (_, res) -> res.setStatus(206));
