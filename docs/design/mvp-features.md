@@ -15,44 +15,44 @@ Tracking framework features required to build a webapp that lets developers publ
 
 ### ✅ Done
 
-| Feature | Notes |
-|---------|-------|
-| Routing | Verb methods (`get`, `post`, `put`, `delete`, `patch`, `options`), path parameters via `{name}`, nested `prefix()` grouping, trie-based matcher with backtracking, 404/405 responses with `Allow` header aggregation |
-| Middleware | `install(Middleware...)` for global middlewares, trailing `Middleware...` varargs on every route-registration method |
-| Body handling (interfaces) | `BodyHandler<T>` and `BodySupplier<T>` functional interfaces; POST/PUT/PATCH route overloads; supplier-returns-null short-circuit for handled errors |
-| JSON body supplier | `JSONBodySupplier<T>` in `org.lattejava.web.json` package, backed by Jackson 2.19.2 |
-| HEAD handling | Handled automatically by `org.lattejava.http` (routed to GET, body stripped); framework never sees HTTPMethod.HEAD |
-| Exception handling | `ExceptionMiddleware` maps exception classes to status codes; extensible via `protected writeBody()` and `lookupStatus()` hooks |
-| Response helpers | `HTTPResponse.sendRedirect()`, `HTTPResponse.getWriter()` — provided by `org.lattejava.http` |
-| Cookie primitives | `Cookie`, `addCookie`, `getCookies` — provided by `org.lattejava.http` |
-| Lifecycle | `Web implements AutoCloseable`, JVM shutdown hook auto-registered on `start()`, registration locked after `start()` via shared `AtomicBoolean` |
+| Feature                    | Notes                                                                                                                                                                                                                |
+|----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Routing                    | Verb methods (`get`, `post`, `put`, `delete`, `patch`, `options`), path parameters via `{name}`, nested `prefix()` grouping, trie-based matcher with backtracking, 404/405 responses with `Allow` header aggregation |
+| Middleware                 | `install(Middleware...)` for global middlewares, trailing `Middleware...` varargs on every route-registration method                                                                                                 |
+| Body handling (interfaces) | `BodyHandler<T>` and `BodySupplier<T>` functional interfaces; POST/PUT/PATCH route overloads; supplier-returns-null short-circuit for handled errors                                                                 |
+| JSON body supplier         | `JSONBodySupplier<T>` in `org.lattejava.web.json` package, backed by Jackson 2.19.2                                                                                                                                  |
+| HEAD handling              | Handled automatically by `org.lattejava.http` (routed to GET, body stripped); framework never sees HTTPMethod.HEAD                                                                                                   |
+| Exception handling         | `ExceptionMiddleware` maps exception classes to status codes; extensible via `protected writeBody()` and `lookupStatus()` hooks                                                                                      |
+| Response helpers           | `HTTPResponse.sendRedirect()`, `HTTPResponse.getWriter()` — provided by `org.lattejava.http`                                                                                                                         |
+| Cookie primitives          | `Cookie`, `addCookie`, `getCookies` — provided by `org.lattejava.http`                                                                                                                                               |
+| Lifecycle                  | `Web implements AutoCloseable`, JVM shutdown hook auto-registered on `start()`, registration locked after `start()` via shared `AtomicBoolean`                                                                       |
+| Static file serving        | `web.files("/assets", Paths.get("static"))` with Content-Type inference, ETag/Last-Modified, path traversal protection. Needed to serve the SPA's CSS/JS/images.                                                     |
 
 ### 📋 Must-have (MVP blockers)
 
-| Feature | Description |
-|---------|-------------|
-| Static file serving | `web.files("/assets", Paths.get("static"))` with Content-Type inference, ETag/Last-Modified, path traversal protection. Needed to serve the SPA's CSS/JS/images. |
-| Multipart body supplier | `MultipartBodySupplier` adapting `HTTPRequest.getFormData()` / `getFiles()` into the `BodySupplier<T>` pattern for artifact uploads. |
-| CSRF middleware | Double-submit cookie pattern. Issues a JS-readable `csrf_token` cookie, validates `X-CSRF-Token` header against it on POST/PUT/PATCH/DELETE. Returns 403 on mismatch. Configurable path exemptions (e.g., login callback). |
-| JWT validation middleware | Verifies JWT signature against FusionAuth's JWKS, extracts claims, attaches user identity to request as attribute. Likely lives in a separate `latte-auth` module. |
-| OIDC / FusionAuth flow helpers | Login-redirect handler, OAuth2 callback endpoint helper (code exchange, set JWT + refresh cookies, redirect). Likely in the `latte-auth` module. |
-| Refresh-token flow helper | Middleware or helper that uses the refresh cookie to obtain a new JWT when the current one is near-expiry. Also likely in `latte-auth`. |
+| Feature                        | Description                                                                                                                                                                                                                |
+|--------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Multipart body supplier        | `MultipartBodySupplier` adapting `HTTPRequest.getFormData()` / `getFiles()` into the `BodySupplier<T>` pattern for artifact uploads.                                                                                       |
+| CSRF middleware                | Double-submit cookie pattern. Issues a JS-readable `csrf_token` cookie, validates `X-CSRF-Token` header against it on POST/PUT/PATCH/DELETE. Returns 403 on mismatch. Configurable path exemptions (e.g., login callback). |
+| JWT validation middleware      | Verifies JWT signature against FusionAuth's JWKS, extracts claims, attaches user identity to request as attribute. Likely lives in a separate `latte-auth` module.                                                         |
+| OIDC / FusionAuth flow helpers | Login-redirect handler, OAuth2 callback endpoint helper (code exchange, set JWT + refresh cookies, redirect). Likely in the `latte-auth` module.                                                                           |
+| Refresh-token flow helper      | Middleware or helper that uses the refresh cookie to obtain a new JWT when the current one is near-expiry. Also likely in `latte-auth`.                                                                                    |
 
 ### 📋 Strongly recommended (non-blocking)
 
-| Feature | Description |
-|---------|-------------|
+| Feature                    | Description                                                                                                                                                                             |
+|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Per-route body size limits | `org.lattejava.http` has a global `maxRequestBodySize`. Artifact uploads need a higher limit; ordinary JSON endpoints should stay smaller. Expose a per-route override as a middleware. |
-| Request logging middleware | Canonical access-log middleware: method, path, status, duration. Cheap to build on existing middleware; avoids every app rewriting it. |
+| Request logging middleware | Canonical access-log middleware: method, path, status, duration. Cheap to build on existing middleware; avoids every app rewriting it.                                                  |
 
 ### 🔮 Deferred (post-MVP)
 
-| Feature | Notes |
-|---------|-------|
-| CORS | Only needed if the SPA runs on a different origin than the API. For same-origin deployment, skip. |
-| Rate limiting | Add when the upload endpoint justifies it; not a launch blocker. |
-| Security headers middleware | CSP, X-Frame-Options, HSTS, etc. Trivial middleware to write when hardening. |
-| HTML templating | Not needed if the frontend is a SPA. Would matter for server-rendered pages. |
+| Feature                     | Notes                                                                                             |
+|-----------------------------|---------------------------------------------------------------------------------------------------|
+| CORS                        | Only needed if the SPA runs on a different origin than the API. For same-origin deployment, skip. |
+| Rate limiting               | Add when the upload endpoint justifies it; not a launch blocker.                                  |
+| Security headers middleware | CSP, X-Frame-Options, HSTS, etc. Trivial middleware to write when hardening.                      |
+| HTML templating             | Not needed if the frontend is a SPA. Would matter for server-rendered pages.                      |
 
 ---
 
@@ -60,34 +60,34 @@ Tracking framework features required to build a webapp that lets developers publ
 
 ### 📋 Authentication / Authorization
 
-| Feature | Description |
-|---------|-------------|
-| Login redirect endpoint | Redirects unauthenticated users to FusionAuth with `client_id`, `redirect_uri`, `state`, `code_challenge` (PKCE). |
+| Feature                  | Description                                                                                                                                     |
+|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| Login redirect endpoint  | Redirects unauthenticated users to FusionAuth with `client_id`, `redirect_uri`, `state`, `code_challenge` (PKCE).                               |
 | OAuth2 callback endpoint | Receives the authorization code, exchanges it for JWT + refresh tokens via FusionAuth's token endpoint, sets the cookies, redirects to the SPA. |
-| Logout endpoint | Clears JWT + refresh + CSRF cookies; optionally redirects to FusionAuth's logout endpoint. |
-| Authorization middleware | After JWT validation, checks the authenticated user's roles/groups against the target resource (e.g., "user can publish to this group"). |
+| Logout endpoint          | Clears JWT + refresh + CSRF cookies; optionally redirects to FusionAuth's logout endpoint.                                                      |
+| Authorization middleware | After JWT validation, checks the authenticated user's roles/groups against the target resource (e.g., "user can publish to this group").        |
 
 ### 📋 Artifact operations
 
-| Feature | Description |
-|---------|-------------|
-| Upload endpoint | Maven-style layout: `PUT /{group}/{artifact}/{version}/{file}`. Accepts JAR/POM/sources/javadoc + checksum files. |
-| Checksum validation | Validate uploaded SHA-1, SHA-256, MD5 against the artifact bytes. |
-| Immutability policy | Reject re-uploads of existing versions (except SNAPSHOT per configured policy). |
-| Owner check | The uploading user must own the target group. |
-| Browse / search | `GET /{group}/...` lists artifacts, versions, files. Provides Maven-compatible directory listings. |
-| Download | `GET /{group}/{artifact}/{version}/{file}` streams the artifact. |
-| Metadata endpoints | `maven-metadata.xml` generation per artifact. |
+| Feature             | Description                                                                                                       |
+|---------------------|-------------------------------------------------------------------------------------------------------------------|
+| Upload endpoint     | Maven-style layout: `PUT /{group}/{artifact}/{version}/{file}`. Accepts JAR/POM/sources/javadoc + checksum files. |
+| Checksum validation | Validate uploaded SHA-1, SHA-256, MD5 against the artifact bytes.                                                 |
+| Immutability policy | Reject re-uploads of existing versions (except SNAPSHOT per configured policy).                                   |
+| Owner check         | The uploading user must own the target group.                                                                     |
+| Browse / search     | `GET /{group}/...` lists artifacts, versions, files. Provides Maven-compatible directory listings.                |
+| Download            | `GET /{group}/{artifact}/{version}/{file}` streams the artifact.                                                  |
+| Metadata endpoints  | `maven-metadata.xml` generation per artifact.                                                                     |
 
 ### 📋 UI (SPA)
 
-| Feature | Description |
-|---------|-------------|
-| Dashboard | Shows the user's groups, recent uploads, quick actions. |
-| Browse | Searchable artifact tree. |
-| Upload page | Primarily for docs/manual uploads; most uploads will come from build tools via the API. |
-| Group management | Create groups, manage members (invite, remove, role change). |
-| Account settings | Link to FusionAuth for profile edits. |
+| Feature          | Description                                                                             |
+|------------------|-----------------------------------------------------------------------------------------|
+| Dashboard        | Shows the user's groups, recent uploads, quick actions.                                 |
+| Browse           | Searchable artifact tree.                                                               |
+| Upload page      | Primarily for docs/manual uploads; most uploads will come from build tools via the API. |
+| Group management | Create groups, manage members (invite, remove, role change).                            |
+| Account settings | Link to FusionAuth for profile edits.                                                   |
 
 ---
 

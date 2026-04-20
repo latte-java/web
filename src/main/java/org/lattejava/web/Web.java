@@ -22,6 +22,7 @@ public class Web implements AutoCloseable {
   private final String pathPrefix;
   private final AtomicBoolean started;
   private final RouteTrie trie;
+  private Path baseDir;
   private HTTPServer server;
   private Thread shutdownHook;
 
@@ -56,6 +57,23 @@ public class Web implements AutoCloseable {
   }
 
   /**
+   * Sets the base directory for this Web's HTTP context. If not called, the default from the
+   * underlying HTTP server is used (typically the current working directory).
+   *
+   * @param baseDir The base directory for file resolution.
+   * @return This Web instance for chaining.
+   * @throws IllegalStateException if called after {@link #start(int)}.
+   */
+  public Web baseDir(Path baseDir) {
+    if (started.get()) {
+      throw new IllegalStateException("Cannot set baseDir after Web has been started");
+    }
+    Objects.requireNonNull(baseDir, "baseDir must not be null");
+    this.baseDir = baseDir;
+    return this;
+  }
+
+  /**
    * Shuts down the server and removes the JVM shutdown hook.
    */
   public void close() {
@@ -86,6 +104,30 @@ public class Web implements AutoCloseable {
    */
   public Web delete(String pathSpec, Handler handler, Middleware... middlewares) {
     return route(List.of("DELETE"), pathSpec, handler, middlewares);
+  }
+
+  /**
+   * Installs a {@link StaticResourceMiddleware} that serves files from the subdirectory named after
+   * the URL prefix (minus the leading slash). For example, {@code files("/assets")} serves
+   * {@code <baseDir>/assets/*} under {@code /assets/*}.
+   *
+   * @param urlPrefix The URL prefix this middleware will own.
+   * @return This Web instance for chaining.
+   */
+  public Web files(String urlPrefix) {
+    return install(new StaticResourceMiddleware(urlPrefix));
+  }
+
+  /**
+   * Installs a {@link StaticResourceMiddleware} with an explicit mapping from URL prefix to
+   * subdirectory under the HTTP context's base directory.
+   *
+   * @param urlPrefix    The URL prefix.
+   * @param subdirectory The subdirectory under the base directory.
+   * @return This Web instance for chaining.
+   */
+  public Web files(String urlPrefix, String subdirectory) {
+    return install(new StaticResourceMiddleware(urlPrefix, subdirectory));
   }
 
   /**
@@ -329,7 +371,11 @@ public class Web implements AutoCloseable {
       throw new IllegalStateException("Web has already been started");
     }
 
-    HTTPServer newServer = new HTTPServer().withHandler(this::handleRequest).withListener(new HTTPListenerConfiguration(port)).start();
+    HTTPServer newServer = new HTTPServer()
+        .withHandler(this::handleRequest)
+        .withListener(new HTTPListenerConfiguration(port))
+        .withBaseDir(baseDir != null ? baseDir : Paths.get(".")) // Default to current working directory
+        .start();
 
     Thread hook;
     try {
@@ -382,7 +428,13 @@ public class Web implements AutoCloseable {
         response.setStatus(405);
         response.setHeader("Allow", String.join(", ", allowedMethods));
       }
-      case RouteTrie.Outcome.NotFound _ -> response.setStatus(404);
+      case RouteTrie.Outcome.NotFound _ -> {
+        if (globalMiddlewares.isEmpty()) {
+          response.setStatus(404);
+        } else {
+          new MiddlewareChainImpl(globalMiddlewares, (_, res) -> res.setStatus(404)).next(request, response);
+        }
+      }
     }
   }
 }
