@@ -6,4 +6,5 @@ module org.lattejava.web.tests {
   requires org.testng;
 
   opens org.lattejava.web.tests to com.fasterxml.jackson.databind, org.testng;
+  opens org.lattejava.web.tests.middleware to com.fasterxml.jackson.databind, org.testng;
 }

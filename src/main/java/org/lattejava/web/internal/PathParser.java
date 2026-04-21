@@ -5,45 +5,24 @@
  */
 package org.lattejava.web.internal;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
- * Validates path specifications and parses them into a list of {@link Segment}s using a
- * character-by-character finite state machine.
+ * Validates path specifications and parses them into a list of {@link Segment}s using a character-by-character finite
+ * state machine.
  *
  * @author Brian Pontarelli
  */
 public class PathParser {
   /**
-   * A segment of a parsed path specification.
-   */
-  public sealed interface Segment permits Segment.Literal, Segment.Param {
-    record Literal(String value) implements Segment {}
-
-    record Param(String name) implements Segment {}
-  }
-
-  private enum State {
-    INITIAL,
-    SEGMENT_START,
-    LITERAL,
-    PARAM_NAME_START,
-    PARAM_NAME,
-    PARAM_END
-  }
-
-  /**
-   * Validates and parses the given path specification into a list of segments.
+   * Validates and parses the given path specification into a list of segments. Segments might be literals or
+   * parameters, depending on the String. Parameters are denoted by curly braces.
    *
    * @param pathSpec the path specification to parse (e.g., {@code /api/users/{id}})
    * @return a list of {@link Segment} objects representing each path segment
    * @throws IllegalArgumentException if the path specification is invalid
    */
-  public static List<Segment> parse(String pathSpec) {
+  public static List<Segment> parseWithParameters(String pathSpec) {
     Objects.requireNonNull(pathSpec, "pathSpec must not be null");
 
     if (pathSpec.isEmpty()) {
@@ -146,13 +125,56 @@ public class PathParser {
       case LITERAL -> {
         segments.add(new Segment.Literal(buffer.toString()));
       }
-      case PARAM_NAME_START -> throw new IllegalArgumentException(
-          "Invalid parameter syntax (unclosed [{]): in [" + pathSpec + "]");
-      case PARAM_NAME -> throw new IllegalArgumentException(
+      case PARAM_NAME_START, PARAM_NAME -> throw new IllegalArgumentException(
           "Invalid parameter syntax (unclosed [{]): in [" + pathSpec + "]");
       case PARAM_END -> {
         // Valid end state — param was already added
       }
+    }
+
+    return segments;
+  }
+
+  /**
+   * Splits a literal path (request URL path or a route-registration prefix) into its segments using a single
+   * {@code indexOf('/')} pass. Does not validate characters or interpret {@code {name}} parameter syntax — use
+   * {@link #parseWithParameters(String)} for that.
+   * <p>
+   * Semantics match the prior {@code path.split("/", -1)} with the leading empty dropped:
+   * <ul>
+   *   <li>{@code ""} returns an empty list.</li>
+   *   <li>{@code "/"} returns a list containing a single empty string.</li>
+   *   <li>{@code "/a"} returns {@code ["a"]}.</li>
+   *   <li>{@code "/a/"} returns {@code ["a", ""]}.</li>
+   *   <li>{@code "/a/b"} returns {@code ["a", "b"]}.</li>
+   * </ul>
+   *
+   * @param path the path to split.
+   * @return a mutable {@code ArrayList<String>} of segments; callers wrap for immutability if needed.
+   */
+  public static List<String> parsePath(String path) {
+    Objects.requireNonNull(path, "path must not be null");
+
+    ArrayList<String> segments = new ArrayList<>(11);
+    int len = path.length();
+    if (len == 0) {
+      return segments;
+    }
+
+    int start = (path.charAt(0) == '/') ? 1 : 0;
+    if (start >= len) {
+      segments.add("");
+      return segments;
+    }
+
+    while (start <= len) {
+      int slash = path.indexOf('/', start);
+      if (slash < 0) {
+        segments.add(path.substring(start));
+        break;
+      }
+      segments.add(path.substring(start, slash));
+      start = slash + 1;
     }
 
     return segments;
@@ -171,5 +193,25 @@ public class PathParser {
     // extra
     if (c == ':' || c == '@') return true;
     return false;
+  }
+
+  private enum State {
+    INITIAL,
+    SEGMENT_START,
+    LITERAL,
+    PARAM_NAME_START,
+    PARAM_NAME,
+    PARAM_END
+  }
+
+  /**
+   * A segment of a parsed path specification.
+   */
+  public sealed interface Segment permits Segment.Literal, Segment.Param {
+    record Literal(String value) implements Segment {
+    }
+
+    record Param(String name) implements Segment {
+    }
   }
 }

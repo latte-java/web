@@ -34,7 +34,7 @@ public class RouteTrie {
    * @throws IllegalStateException    if conflicting parameter names exist at the same trie position
    */
   public void insert(String pathSpec, Collection<String> methods, Handler handler, List<Middleware> middlewares) {
-    var segments = PathParser.parse(pathSpec);
+    var segments = PathParser.parseWithParameters(pathSpec);
     Node node = root;
 
     for (var segment : segments) {
@@ -73,40 +73,42 @@ public class RouteTrie {
   /**
    * Matches a request path and method against the trie.
    *
-   * @param path   the request path (e.g., {@code /api/users/42})
-   * @param method the HTTP method (e.g., {@code GET})
-   * @return the match outcome
+   * @param path   The request path (e.g., {@code /api/users/42})
+   * @param method The HTTP method (e.g., {@code GET})
+   * @return The match outcome. All outcome variants carry the parsed path segments so the
+   *     caller can reuse them (e.g., for prefix-scoped middleware resolution) without re-parsing.
    */
   public Outcome match(String path, String method) {
-    String[] parts = path.split("/", -1);
-    // parts[0] is always "" (before the leading '/') — drop it
-    String[] segments = new String[parts.length - 1];
-    System.arraycopy(parts, 1, segments, 0, segments.length);
+    List<String> segments = PathParser.parsePath(path);
+    List<String> immutableSegments = Collections.unmodifiableList(segments);
 
-    // Defend against adversarially deep paths
-    if (segments.length > MAX_SEGMENTS) {
-      return Outcome.NotFound.INSTANCE;
+    // Defend against adversarially deep paths.
+    if (segments.size() > MAX_SEGMENTS) {
+      return new Outcome.NotFound(immutableSegments);
     }
 
     Map<String, String> params = new HashMap<>();
-    return matchRecursive(root, segments, 0, params, method.toUpperCase(Locale.ROOT));
+    return matchRecursive(root, immutableSegments, 0, params, method.toUpperCase(Locale.ROOT));
   }
 
-  private Outcome matchRecursive(Node node, String[] segments, int idx,
+  private Outcome matchRecursive(Node node, List<String> segments, int idx,
                                  Map<String, String> params, String method) {
-    if (idx == segments.length) {
+    if (idx == segments.size()) {
       // End of path — check for terminal handler
       if (node.entriesByMethod == null || node.entriesByMethod.isEmpty()) {
-        return Outcome.NotFound.INSTANCE;
+        return new Outcome.NotFound(segments);
       }
+
       RouteEntry entry = node.entriesByMethod.get(method);
       if (entry != null) {
-        return new Outcome.Found(entry.handler(), entry.middlewares(), Map.copyOf(params));
+        return new Outcome.Found(entry.handler(), entry.middlewares(), Map.copyOf(params), segments);
       }
-      return new Outcome.MethodNotAllowed(Collections.unmodifiableSet(new LinkedHashSet<>(node.entriesByMethod.keySet())));
+
+      return new Outcome.MethodNotAllowed(
+          Collections.unmodifiableSet(new LinkedHashSet<>(node.entriesByMethod.keySet())), segments);
     }
 
-    String segment = segments[idx];
+    String segment = segments.get(idx);
     Set<String> aggregatedAllowed = null;
 
     // 1. Try static child first (literal beats param structurally)
@@ -144,9 +146,10 @@ public class RouteTrie {
     }
 
     if (aggregatedAllowed != null) {
-      return new Outcome.MethodNotAllowed(Collections.unmodifiableSet(aggregatedAllowed));
+      return new Outcome.MethodNotAllowed(Collections.unmodifiableSet(aggregatedAllowed), segments);
     }
-    return Outcome.NotFound.INSTANCE;
+
+    return new Outcome.NotFound(segments);
   }
 
   /**
@@ -155,17 +158,18 @@ public class RouteTrie {
   public record RouteEntry(Handler handler, List<Middleware> middlewares) {}
 
   /**
-   * The result of a route match.
+   * The result of a route match. All variants carry the parsed path segments so callers can reuse
+   * them for downstream work (e.g., prefix-scoped middleware resolution) without re-parsing.
    */
   public sealed interface Outcome permits Outcome.Found, Outcome.MethodNotAllowed, Outcome.NotFound {
-    enum NotFound implements Outcome {
-      INSTANCE
+    record Found(Handler handler, List<Middleware> middlewares, Map<String, String> pathParams,
+                 List<String> segments) implements Outcome {
     }
 
-    record Found(Handler handler, List<Middleware> middlewares, Map<String, String> pathParams) implements Outcome {
+    record MethodNotAllowed(Set<String> allowedMethods, List<String> segments) implements Outcome {
     }
 
-    record MethodNotAllowed(Set<String> allowedMethods) implements Outcome {
+    record NotFound(List<String> segments) implements Outcome {
     }
   }
 

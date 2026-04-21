@@ -3,7 +3,7 @@
  *
  * Licensed under the MIT License. See LICENSE for details.
  */
-package org.lattejava.web.tests;
+package org.lattejava.web.tests.middleware;
 
 import java.io.IOException;
 import java.net.http.HttpResponse;
@@ -18,8 +18,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.Locale;
 
-import org.lattejava.web.StaticResourceMiddleware;
+import org.lattejava.web.middleware.StaticResources;
 import org.lattejava.web.Web;
+import org.lattejava.web.tests.*;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -191,7 +192,7 @@ public class StaticResourcesTest extends BaseWebTest {
   public void filter_canBlockRequest() throws Exception {
     try (var web = new Web()) {
       web.baseDir(tempDir);
-      web.install(new StaticResourceMiddleware("/assets", "assets", Duration.ofDays(7),
+      web.install(new StaticResources("/assets", "assets", Duration.ofDays(7),
           (uri, _) -> !uri.endsWith(".js")));
       web.get("/assets/app.js", (_, res) -> res.setStatus(202)); // fall-through target
       web.start(PORT);
@@ -223,12 +224,12 @@ public class StaticResourcesTest extends BaseWebTest {
 
   @Test(expectedExceptions = IllegalArgumentException.class)
   public void constructor_rejectsPrefixWithoutLeadingSlash() {
-    new StaticResourceMiddleware("assets");
+    new StaticResources("assets");
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
   public void constructor_rejectsPrefixWithTrailingSlash() {
-    new StaticResourceMiddleware("/assets/");
+    new StaticResources("/assets/");
   }
 
   @Test

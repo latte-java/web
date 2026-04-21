@@ -3,12 +3,13 @@
  *
  * Licensed under the MIT License. See LICENSE for details.
  */
-package org.lattejava.web;
+package org.lattejava.web.middleware;
 
 import java.util.Map;
 
 import org.lattejava.http.server.HTTPRequest;
 import org.lattejava.http.server.HTTPResponse;
+import org.lattejava.web.*;
 
 /**
  * A middleware that catches exceptions thrown by downstream middlewares or handlers and maps them
@@ -25,7 +26,7 @@ import org.lattejava.http.server.HTTPResponse;
  *
  * @author Brian Pontarelli
  */
-public class ExceptionMiddleware implements Middleware {
+public class ExceptionHandler implements Middleware {
   protected final Map<Class<? extends Throwable>, Integer> statusByException;
 
   /**
@@ -34,7 +35,7 @@ public class ExceptionMiddleware implements Middleware {
    * @param statusByException A map from exception class to HTTP status code. The map is defensively
    *                          copied.
    */
-  public ExceptionMiddleware(Map<Class<? extends Throwable>, Integer> statusByException) {
+  public ExceptionHandler(Map<Class<? extends Throwable>, Integer> statusByException) {
     this.statusByException = Map.copyOf(statusByException);
   }
 

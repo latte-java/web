@@ -3,20 +3,21 @@
  *
  * Licensed under the MIT License. See LICENSE for details.
  */
-package org.lattejava.web.tests;
+package org.lattejava.web.tests.middleware;
 
 import java.net.http.HttpResponse;
 import java.util.Map;
 
 import org.lattejava.http.server.HTTPRequest;
 import org.lattejava.http.server.HTTPResponse;
-import org.lattejava.web.ExceptionMiddleware;
+import org.lattejava.web.middleware.ExceptionHandler;
 import org.lattejava.web.Web;
+import org.lattejava.web.tests.*;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
 
-public class ExceptionMiddlewareTest extends BaseWebTest {
+public class ExceptionHandlerTest extends BaseWebTest {
 
   static class NotFoundException extends RuntimeException {
     NotFoundException(String message) {
@@ -27,7 +28,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
   @Test
   public void exceptionMiddleware_mapsThrownException() throws Exception {
     try (var web = new Web()) {
-      web.install(new ExceptionMiddleware(Map.of(IllegalArgumentException.class, 400)));
+      web.install(new ExceptionHandler(Map.of(IllegalArgumentException.class, 400)));
       web.get("/bad", (req, res) -> {
         throw new IllegalArgumentException("nope");
       });
@@ -41,7 +42,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
   @Test
   public void exceptionMiddleware_unmappedExceptionPropagates() throws Exception {
     try (var web = new Web()) {
-      web.install(new ExceptionMiddleware(Map.of(IllegalStateException.class, 400)));
+      web.install(new ExceptionHandler(Map.of(IllegalStateException.class, 400)));
       web.get("/unmapped", (req, res) -> {
         throw new RuntimeException("unmapped");
       });
@@ -56,7 +57,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
   @Test
   public void exceptionMiddleware_subclassWalksUpHierarchy() throws Exception {
     try (var web = new Web()) {
-      web.install(new ExceptionMiddleware(Map.of(RuntimeException.class, 500)));
+      web.install(new ExceptionHandler(Map.of(RuntimeException.class, 500)));
       web.get("/subclass", (req, res) -> {
         throw new IllegalStateException("subclass of RuntimeException");
       });
@@ -72,7 +73,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
     try (var web = new Web()) {
       // Map both RuntimeException (500) and IllegalArgumentException (400).
       // When IAE is thrown, the 400 mapping should win because it's more specific.
-      web.install(new ExceptionMiddleware(Map.of(
+      web.install(new ExceptionHandler(Map.of(
           RuntimeException.class, 500,
           IllegalArgumentException.class, 400
       )));
@@ -89,7 +90,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
   @Test
   public void exceptionMiddleware_noExceptionPassesThrough() throws Exception {
     try (var web = new Web()) {
-      web.install(new ExceptionMiddleware(Map.of(RuntimeException.class, 500)));
+      web.install(new ExceptionHandler(Map.of(RuntimeException.class, 500)));
       web.get("/ok", (req, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -101,7 +102,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
   @Test
   public void exceptionMiddleware_globalInstall_mapsExceptionForAnyRoute() throws Exception {
     try (var web = new Web()) {
-      web.install(new ExceptionMiddleware(Map.of(NotFoundException.class, 404)));
+      web.install(new ExceptionHandler(Map.of(NotFoundException.class, 404)));
       web.get("/missing", (req, res) -> {
         throw new NotFoundException("not here");
       });
@@ -115,7 +116,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
   @Test
   public void exceptionMiddleware_subclassCanWriteBody() throws Exception {
     // A subclass overrides writeBody() to emit a response body for mapped exceptions.
-    var middleware = new ExceptionMiddleware(Map.of(IllegalArgumentException.class, 400)) {
+    var middleware = new ExceptionHandler(Map.of(IllegalArgumentException.class, 400)) {
       @Override
       protected void writeBody(HTTPRequest req, HTTPResponse res, Exception exception, int status) throws Exception {
         res.setHeader("X-Error-Class", exception.getClass().getSimpleName());
@@ -142,7 +143,7 @@ public class ExceptionMiddlewareTest extends BaseWebTest {
   @Test
   public void exceptionMiddleware_subclassCanOverrideLookupStatus() throws Exception {
     // A subclass overrides lookupStatus() to compute the status dynamically.
-    var middleware = new ExceptionMiddleware(Map.of()) {
+    var middleware = new ExceptionHandler(Map.of()) {
       @Override
       protected Integer lookupStatus(Class<?> type) {
         // Any exception whose class name contains "NotFound" → 404; everything else falls through

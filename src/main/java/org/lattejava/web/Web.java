@@ -9,6 +9,7 @@ import module java.base;
 import module org.lattejava.http;
 
 import org.lattejava.web.internal.*;
+import org.lattejava.web.middleware.*;
 
 /**
  * A lightweight web framework built on top of the Latte Java HTTP server.
@@ -17,8 +18,8 @@ import org.lattejava.web.internal.*;
  */
 @SuppressWarnings("UnusedReturnValue")
 public class Web implements AutoCloseable {
-  private final List<Middleware> globalMiddlewares;
   private final boolean isChild;
+  private final MiddlewareTrie middlewareTrie;
   private final String pathPrefix;
   private final AtomicBoolean started;
   private final RouteTrie trie;
@@ -31,15 +32,15 @@ public class Web implements AutoCloseable {
     this.pathPrefix = "";
     this.trie = new RouteTrie();
     this.started = new AtomicBoolean(false);
-    this.globalMiddlewares = new ArrayList<>();
+    this.middlewareTrie = new MiddlewareTrie();
   }
 
-  private Web(String pathPrefix, RouteTrie trie, AtomicBoolean started, List<Middleware> globalMiddlewares) {
+  private Web(String pathPrefix, RouteTrie trie, AtomicBoolean started, MiddlewareTrie middlewareTrie) {
     this.isChild = true;
     this.pathPrefix = pathPrefix;
     this.trie = trie;
     this.started = started;
-    this.globalMiddlewares = globalMiddlewares;
+    this.middlewareTrie = middlewareTrie;
   }
 
   private static boolean isValidMethodToken(String method) {
@@ -57,8 +58,8 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Sets the base directory for this Web's HTTP context. If not called, the default from the
-   * underlying HTTP server is used (typically the current working directory).
+   * Sets the base directory for this Web's HTTP context. If not called, the default from the underlying HTTP server is
+   * used (typically the current working directory).
    *
    * @param baseDir The base directory for file resolution.
    * @return This Web instance for chaining.
@@ -107,27 +108,27 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Installs a {@link StaticResourceMiddleware} that serves files from the subdirectory named after
-   * the URL prefix (minus the leading slash). For example, {@code files("/assets")} serves
-   * {@code <baseDir>/assets/*} under {@code /assets/*}.
+   * Installs a {@link StaticResources} that serves files from the subdirectory named after the URL prefix
+   * (minus the leading slash). For example, {@code files("/assets")} serves {@code <baseDir>/assets/*} under
+   * {@code /assets/*}.
    *
    * @param urlPrefix The URL prefix this middleware will own.
    * @return This Web instance for chaining.
    */
   public Web files(String urlPrefix) {
-    return install(new StaticResourceMiddleware(urlPrefix));
+    return install(new StaticResources(urlPrefix));
   }
 
   /**
-   * Installs a {@link StaticResourceMiddleware} with an explicit mapping from URL prefix to
-   * subdirectory under the HTTP context's base directory.
+   * Installs a {@link StaticResources} with an explicit mapping from URL prefix to subdirectory under the HTTP
+   * context's base directory.
    *
    * @param urlPrefix    The URL prefix.
    * @param subdirectory The subdirectory under the base directory.
    * @return This Web instance for chaining.
    */
   public Web files(String urlPrefix, String subdirectory) {
-    return install(new StaticResourceMiddleware(urlPrefix, subdirectory));
+    return install(new StaticResources(urlPrefix, subdirectory));
   }
 
   /**
@@ -158,13 +159,15 @@ public class Web implements AutoCloseable {
     if (started.get()) {
       throw new IllegalStateException("Cannot register middlewares after Web has been started");
     }
+
     Objects.requireNonNull(middlewares, "middlewares must not be null");
     for (Middleware m : middlewares) {
       if (m == null) {
         throw new IllegalArgumentException("Middleware must not be null");
       }
     }
-    Collections.addAll(globalMiddlewares, middlewares);
+
+    middlewareTrie.install(pathPrefix, middlewares);
     return this;
   }
 
@@ -249,9 +252,10 @@ public class Web implements AutoCloseable {
     if (started.get()) {
       throw new IllegalStateException("Cannot register routes after Web has been started");
     }
+
     Objects.requireNonNull(newPrefix, "newPrefix cannot be null");
     Objects.requireNonNull(group, "group cannot be null");
-    Web child = new Web(pathPrefix + newPrefix, trie, started, globalMiddlewares);
+    Web child = new Web(pathPrefix + newPrefix, trie, started, middlewareTrie);
     group.accept(child);
     return this;
   }
@@ -408,33 +412,36 @@ public class Web implements AutoCloseable {
     RouteTrie.Outcome outcome = trie.match(path, method);
 
     switch (outcome) {
-      case RouteTrie.Outcome.Found(var handler, var routeMiddlewares, var pathParams) -> {
+      case RouteTrie.Outcome.Found(var handler, var routeMiddlewares, var pathParams, var segments) -> {
         for (var entry : pathParams.entrySet()) {
           request.setAttribute(entry.getKey(), entry.getValue());
         }
 
+        List<Middleware> prefixMiddlewares = middlewareTrie.collect(segments);
         List<Middleware> chainMiddlewares;
-        if (globalMiddlewares.isEmpty() && routeMiddlewares.isEmpty()) {
+        if (prefixMiddlewares.isEmpty() && routeMiddlewares.isEmpty()) {
           chainMiddlewares = List.of();
         } else {
-          chainMiddlewares = new ArrayList<>(globalMiddlewares.size() + routeMiddlewares.size());
-          chainMiddlewares.addAll(globalMiddlewares);
+          chainMiddlewares = new ArrayList<>(prefixMiddlewares.size() + routeMiddlewares.size());
+          chainMiddlewares.addAll(prefixMiddlewares);
           chainMiddlewares.addAll(routeMiddlewares);
         }
 
         new MiddlewareChainImpl(chainMiddlewares, handler).next(request, response);
       }
-      case RouteTrie.Outcome.MethodNotAllowed(var allowedMethods) -> {
+      case RouteTrie.Outcome.MethodNotAllowed(var allowedMethods, var _) -> {
         response.setStatus(405);
         response.setHeader("Allow", String.join(", ", allowedMethods));
       }
-      case RouteTrie.Outcome.NotFound _ -> {
-        if (globalMiddlewares.isEmpty()) {
+      case RouteTrie.Outcome.NotFound(var segments) -> {
+        List<Middleware> prefixMiddlewares = middlewareTrie.collect(segments);
+        if (prefixMiddlewares.isEmpty()) {
           response.setStatus(404);
         } else {
-          new MiddlewareChainImpl(globalMiddlewares, (_, res) -> res.setStatus(404)).next(request, response);
+          new MiddlewareChainImpl(prefixMiddlewares, (_, res) -> res.setStatus(404)).next(request, response);
         }
       }
     }
   }
+
 }
