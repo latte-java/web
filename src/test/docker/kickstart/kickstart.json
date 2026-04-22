@@ -61,9 +61,7 @@
     {
       "method": "POST",
       "url": "/api/application/#{standardAppId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "application": {
           "name": "app",
@@ -78,9 +76,7 @@
     {
       "method": "POST",
       "url": "/api/application/#{rotatingRefreshAppId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "application": {
           "name": "rotating-refresh-tokens",
@@ -103,9 +99,7 @@
     {
       "method": "POST",
       "url": "/api/application/#{keycloakAppId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "application": {
           "name": "keycloak",
@@ -124,9 +118,7 @@
     {
       "method": "POST",
       "url": "/api/application/#{fastAppId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "application": {
           "name": "fast-app",
@@ -148,9 +140,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardUserId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{standardAppId}",
@@ -165,9 +155,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardAdminId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{standardAppId}",
@@ -182,9 +170,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardUserId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{rotatingRefreshAppId}",
@@ -195,9 +181,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardAdminId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{rotatingRefreshAppId}",
@@ -208,9 +192,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardUserId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{keycloakAppId}",
@@ -221,9 +203,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardAdminId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{keycloakAppId}",
@@ -234,9 +214,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardUserId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{fastAppId}",
@@ -247,9 +225,7 @@
     {
       "method": "POST",
       "url": "/api/user/registration/#{standardAdminId}",
-      "headers": {
-        "X-FusionAuth-TenantId": "#{standardTenantId}"
-      },
+      "tenantId": "#{standardTenantId}",
       "body": {
         "registration": {
           "applicationId": "#{fastAppId}",
