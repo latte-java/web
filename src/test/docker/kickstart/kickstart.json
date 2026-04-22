@@ -1,0 +1,261 @@
+{
+  "variables": {
+    "apiKey": "bf69486b-4733-4470-a592-f1bfce7af580",
+    "asymmetricKeyId": "00000000-0000-0000-0000-000000000001",
+    "keycloakJWTPopulateLambdaId": "00000000-0000-0000-0000-000000000002",
+    "standardTenantId": "10000000-0000-0000-0000-000000000001",
+    "standardAppId": "10000000-0000-0000-0000-000000000002",
+    "rotatingRefreshAppId": "10000000-0000-0000-0000-000000000003",
+    "keycloakAppId": "10000000-0000-0000-0000-000000000004",
+    "standardUserId": "10000000-0000-0000-0000-000000000010",
+    "standardAdminId": "10000000-0000-0000-0000-000000000011",
+    "fastAppId": "20000000-0000-0000-0000-000000000002",
+    "defaultPassword": "password"
+  },
+  "apiKeys": [
+    {
+      "key": "#{apiKey}",
+      "description": "Unrestricted API key for testing"
+    }
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "url": "/api/key/generate/#{asymmetricKeyId}",
+      "body": {
+        "key": {
+          "algorithm": "RS256",
+          "name": "For tenants",
+          "length": 2048
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/tenant/#{standardTenantId}",
+      "body": {
+        "tenant": {
+          "name": "standard",
+          "issuer": "acme.com",
+          "jwtConfiguration": {
+            "accessTokenKeyId": "#{asymmetricKeyId}",
+            "idTokenKeyId": "#{asymmetricKeyId}",
+            "refreshTokenTimeToLiveInMinutes": 43200,
+            "timeToLiveInSeconds": 3600
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/lambda/#{keycloakJWTPopulateLambdaId}",
+      "body": {
+        "lambda": {
+          "name": "Keycloak JWT populate",
+          "type": "JWTPopulate",
+          "engineType": "GraalJS",
+          "body": "function populate(jwt, user, registration) {\n  jwt.realm_access = { roles: registration.roles };\n  delete jwt.roles;\n}"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/#{standardAppId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "application": {
+          "name": "app",
+          "roles": [
+            { "name": "user" },
+            { "name": "admin" },
+            { "name": "moderator" }
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/#{rotatingRefreshAppId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "application": {
+          "name": "rotating-refresh-tokens",
+          "jwtConfiguration": {
+            "enabled": true,
+            "accessTokenKeyId": "#{asymmetricKeyId}",
+            "idTokenKeyId": "#{asymmetricKeyId}",
+            "refreshTokenTimeToLiveInMinutes": 43200,
+            "timeToLiveInSeconds": 3600,
+            "refreshTokenUsagePolicy": "OneTimeUse"
+          },
+          "roles": [
+            { "name": "user" },
+            { "name": "admin" },
+            { "name": "moderator" }
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/#{keycloakAppId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "application": {
+          "name": "keycloak",
+          "lambdaConfiguration": {
+            "accessTokenPopulateId": "#{keycloakJWTPopulateLambdaId}",
+            "idTokenPopulateId": "#{keycloakJWTPopulateLambdaId}"
+          },
+          "roles": [
+            { "name": "user" },
+            { "name": "admin" },
+            { "name": "moderator" }
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/#{fastAppId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "application": {
+          "name": "fast-app",
+          "jwtConfiguration": {
+            "enabled": true,
+            "accessTokenKeyId": "#{asymmetricKeyId}",
+            "idTokenKeyId": "#{asymmetricKeyId}",
+            "refreshTokenTimeToLiveInMinutes": 1,
+            "timeToLiveInSeconds": 1
+          },
+          "roles": [
+            { "name": "user" },
+            { "name": "admin" },
+            { "name": "moderator" }
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardUserId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{standardAppId}",
+          "roles": ["user", "moderator"]
+        },
+        "user": {
+          "email": "user@example.com",
+          "password": "#{defaultPassword}"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardAdminId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{standardAppId}",
+          "roles": ["admin"]
+        },
+        "user": {
+          "email": "admin@example.com",
+          "password": "#{defaultPassword}"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardUserId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{rotatingRefreshAppId}",
+          "roles": ["user", "moderator"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardAdminId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{rotatingRefreshAppId}",
+          "roles": ["admin"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardUserId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{keycloakAppId}",
+          "roles": ["user", "moderator"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardAdminId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{keycloakAppId}",
+          "roles": ["admin"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardUserId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{fastAppId}",
+          "roles": ["user", "moderator"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardAdminId}",
+      "headers": {
+        "X-FusionAuth-TenantId": "#{standardTenantId}"
+      },
+      "body": {
+        "registration": {
+          "applicationId": "#{fastAppId}",
+          "roles": ["admin"]
+        }
+      }
+    }
+  ]
+}
