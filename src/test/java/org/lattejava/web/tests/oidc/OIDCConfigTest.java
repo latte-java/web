@@ -8,7 +8,6 @@ package org.lattejava.web.tests.oidc;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
-import java.util.function.Function;
 
 import org.lattejava.web.oidc.OIDCConfig;
 import org.testng.annotations.Test;

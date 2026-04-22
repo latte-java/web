@@ -52,8 +52,8 @@ public record OIDCConfig(
    * (issuer or endpoints, clientId, clientSecret, redirectURI) must be set explicitly.
    */
   public static class Builder {
-    private URI authorizeEndpoint;
     private String accessTokenCookieName = "access_token";
+    private URI authorizeEndpoint;
     private String callbackPath = "/oidc/return";
     private String clientId;
     private String clientSecret;
@@ -66,8 +66,8 @@ public record OIDCConfig(
     private String postLoginLanding = "/";
     private String postLogoutLanding = "/";
     private URI redirectURI;
-    private Duration refreshTokenMaxAge = Duration.ofDays(30);
     private String refreshTokenCookieName = "refresh_token";
+    private Duration refreshTokenMaxAge = Duration.ofDays(30);
     private String returnToCookieName = "oidc_return_to";
     private Function<Object, Iterable<String>> roleExtractor = jwt -> {
       // Replaced in Task 5 once the JWT library API is verified; placeholder default.
