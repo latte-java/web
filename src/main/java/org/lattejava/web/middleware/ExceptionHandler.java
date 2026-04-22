@@ -5,6 +5,7 @@
  */
 package org.lattejava.web.middleware;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.lattejava.http.server.HTTPRequest;
@@ -27,16 +28,22 @@ import org.lattejava.web.*;
  * @author Brian Pontarelli
  */
 public class ExceptionHandler implements Middleware {
+  private static final Map<Class<? extends Throwable>, Integer> DEFAULT_STATUS_BY_EXCEPTION =
+      Map.of(UnauthenticatedException.class, 401);
+
   protected final Map<Class<? extends Throwable>, Integer> statusByException;
 
   /**
-   * Constructs an ExceptionMiddleware with the given mapping.
+   * Constructs an ExceptionMiddleware with the given mapping. Any entry in {@code statusByException} overrides the
+   * built-in defaults. Built-in defaults: {@link UnauthenticatedException} maps to {@code 401}.
    *
-   * @param statusByException A map from exception class to HTTP status code. The map is defensively
-   *                          copied.
+   * @param statusByException A map from exception class to HTTP status code. The map is defensively copied and merged
+   *                          with built-in defaults (user-supplied entries win).
    */
   public ExceptionHandler(Map<Class<? extends Throwable>, Integer> statusByException) {
-    this.statusByException = Map.copyOf(statusByException);
+    Map<Class<? extends Throwable>, Integer> merged = new HashMap<>(DEFAULT_STATUS_BY_EXCEPTION);
+    merged.putAll(statusByException);
+    this.statusByException = Map.copyOf(merged);
   }
 
   @Override

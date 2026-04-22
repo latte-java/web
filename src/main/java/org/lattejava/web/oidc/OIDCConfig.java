@@ -7,11 +7,13 @@ package org.lattejava.web.oidc;
 
 import module java.base;
 
+import org.lattejava.jwt.domain.JWT;
+
 /**
  * Configuration for an {@link OpenIDConnect} instance. Use {@link #builder()} to construct.
  * <p>
- * Either {@code issuer} (for OIDC Discovery) or all four endpoint URLs (authorize, token,
- * userinfo, jwks) must be provided. Mixing is allowed; explicit endpoints override discovered ones.
+ * Either {@code issuer} (for OIDC Discovery) or all four endpoint URLs (authorize, token, userinfo, jwks) must be
+ * provided. Mixing is allowed; explicit endpoints override discovered ones.
  *
  * @author Brian Pontarelli
  */
@@ -26,7 +28,7 @@ public record OIDCConfig(
     String clientSecret,
     URI redirectURI,
     List<String> scopes,
-    Function<Object, Iterable<String>> roleExtractor,
+    Function<JWT, Iterable<String>> roleExtractor,
     boolean validateAccessToken,
     String postLoginLanding,
     String postLogoutLanding,
@@ -41,7 +43,7 @@ public record OIDCConfig(
     Duration refreshTokenMaxAge
 ) {
   /**
-   * @return A new {@link Builder} pre-populated with default values.
+   * @return A new Builder pre-populated with sensible defaults for all optional fields.
    */
   public static Builder builder() {
     return new Builder();
@@ -49,7 +51,8 @@ public record OIDCConfig(
 
   /**
    * A builder for {@link OIDCConfig}. All optional fields are pre-populated with sensible defaults; required fields
-   * (issuer or endpoints, clientId, clientSecret, redirectURI) must be set explicitly.
+   * (issuer or all four endpoints, clientId, clientSecret) must be set explicitly. Call {@link #build()} to produce an
+   * immutable config — validation runs at build time and throws {@link IllegalArgumentException} on violation.
    */
   public static class Builder {
     private String accessTokenCookieName = "access_token";
@@ -69,9 +72,9 @@ public record OIDCConfig(
     private String refreshTokenCookieName = "refresh_token";
     private Duration refreshTokenMaxAge = Duration.ofDays(30);
     private String returnToCookieName = "oidc_return_to";
-    private Function<Object, Iterable<String>> roleExtractor = jwt -> {
-      // Replaced in Task 5 once the JWT library API is verified; placeholder default.
-      return List.of();
+    private Function<JWT, Iterable<String>> roleExtractor = jwt -> {
+      Object raw = jwt.getObject("roles");
+      return toIterable(raw);
     };
     private List<String> scopes = List.of("openid", "profile", "email", "offline_access");
     private String stateCookieName = "oidc_state";
@@ -80,9 +83,59 @@ public record OIDCConfig(
     private boolean validateAccessToken = true;
 
     /**
-     * @return A new {@link OIDCConfig} with the current builder values.
+     * Validates the builder state and returns a new immutable {@link OIDCConfig}.
+     *
+     * @return The immutable config.
+     * @throws IllegalArgumentException If any required field is missing or any constraint is violated.
      */
     public OIDCConfig build() {
+      if (clientId == null || clientId.isBlank()) {
+        throw new IllegalArgumentException("clientId must not be null or blank");
+      }
+      if (clientSecret == null || clientSecret.isBlank()) {
+        throw new IllegalArgumentException("clientSecret must not be null or blank");
+      }
+
+      boolean hasIssuer = issuer != null && !issuer.isBlank();
+      boolean hasAllEndpoints = authorizeEndpoint != null && tokenEndpoint != null
+          && userinfoEndpoint != null && jwksEndpoint != null;
+      if (!hasIssuer && !hasAllEndpoints) {
+        throw new IllegalArgumentException(
+            "Either [issuer] must be set or all four endpoints (authorize, token, userinfo, jwks) must be set");
+      }
+
+      if (scopes == null || !scopes.contains("openid")) {
+        throw new IllegalArgumentException("scopes must contain [openid]");
+      }
+      if (roleExtractor == null) {
+        throw new IllegalArgumentException("roleExtractor must not be null");
+      }
+
+      Set<String> cookieNames = new HashSet<>();
+      for (String name : List.of(stateCookieName, accessTokenCookieName, refreshTokenCookieName,
+          idTokenCookieName, returnToCookieName)) {
+        if (name == null || name.isBlank()) {
+          throw new IllegalArgumentException("cookie names must not be null or blank");
+        }
+        if (!cookieNames.add(name)) {
+          throw new IllegalArgumentException("duplicate cookie name: [" + name + "]");
+        }
+      }
+
+      Set<String> paths = new HashSet<>();
+      for (String path : List.of(callbackPath, logoutPath, logoutReturnPath)) {
+        if (path == null || !path.startsWith("/")) {
+          throw new IllegalArgumentException("path must start with [/]: [" + path + "]");
+        }
+        if (!paths.add(path)) {
+          throw new IllegalArgumentException("duplicate path: [" + path + "]");
+        }
+      }
+
+      requireSecureURI("issuer", issuer == null ? null : URI.create(issuer));
+      requireSecureURI("redirectURI", redirectURI);
+      requireSecureURI("logoutEndpoint", logoutEndpoint);
+
       return new OIDCConfig(issuer, authorizeEndpoint, tokenEndpoint, userinfoEndpoint, jwksEndpoint,
           logoutEndpoint, clientId, clientSecret, redirectURI, scopes, roleExtractor,
           validateAccessToken, postLoginLanding, postLogoutLanding, callbackPath, logoutPath,
@@ -175,7 +228,7 @@ public record OIDCConfig(
       return this;
     }
 
-    public Builder roleExtractor(Function<Object, Iterable<String>> value) {
+    public Builder roleExtractor(Function<JWT, Iterable<String>> value) {
       this.roleExtractor = value;
       return this;
     }
@@ -203,6 +256,58 @@ public record OIDCConfig(
     public Builder validateAccessToken(boolean value) {
       this.validateAccessToken = value;
       return this;
+    }
+
+    /**
+     * Enforces that the URI uses HTTPS, except when the host is a loopback address. This makes local development with
+     * {@code http://localhost:9011} (etc.) workable without undermining production security posture.
+     */
+    private static void requireSecureURI(String field, URI uri) {
+      if (uri == null) {
+        return;
+      }
+      String scheme = uri.getScheme();
+      if ("https".equalsIgnoreCase(scheme)) {
+        return;
+      }
+      String host = uri.getHost();
+      boolean loopback = host != null
+          && ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host));
+      if ("http".equalsIgnoreCase(scheme) && loopback) {
+        return;
+      }
+      throw new IllegalArgumentException(
+          field + " must use https (http:// is permitted only for localhost/127.0.0.1/::1): [" + uri + "]");
+    }
+
+    /**
+     * Coerces the raw value of a JWT claim into an {@link Iterable} of role names. Handles null, single strings,
+     * Iterables, arrays, and falls back to {@code String.valueOf} for anything else.
+     */
+    private static Iterable<String> toIterable(Object raw) {
+      if (raw == null) {
+        return List.of();
+      }
+      if (raw instanceof Iterable<?> it) {
+        List<String> out = new ArrayList<>();
+        for (Object o : it) {
+          if (o != null) {
+            out.add(String.valueOf(o));
+          }
+        }
+        return out;
+      }
+      if (raw.getClass().isArray()) {
+        Object[] arr = (Object[]) raw;
+        List<String> out = new ArrayList<>(arr.length);
+        for (Object o : arr) {
+          if (o != null) {
+            out.add(String.valueOf(o));
+          }
+        }
+        return out;
+      }
+      return List.of(String.valueOf(raw));
     }
   }
 }
