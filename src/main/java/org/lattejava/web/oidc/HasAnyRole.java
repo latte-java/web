@@ -7,57 +7,46 @@ package org.lattejava.web.oidc;
 
 import module java.base;
 import module org.lattejava.http;
-
-import org.lattejava.jwt.domain.JWT;
-import org.lattejava.web.*;
+import module org.lattejava.web;
 
 /**
- * Middleware that requires a valid session AND at least one of the named roles. Unauthenticated requests trigger the
- * same login-redirect flow as {@link Authenticated}; authenticated requests missing all required roles receive a 403.
+ * Middleware that requires a valid session AND at least one of the named roles.
+ * <p>
+ * Unauthenticated requests return a 401 rather than a login request since they represent a misconfigured middleware
+ * chain. Routes should always call OpenIDConnect.authenticated() before this middleware to ensure the user is logged
+ * in.
  *
  * @author Brian Pontarelli
  */
 public class HasAnyRole implements Middleware {
-  private final Authenticated authenticated;
+  private final OIDCConfig config;
   private final Set<String> required;
 
-  public HasAnyRole(OpenIDConnect<?> oidc, String... roles) {
+  HasAnyRole(OIDCConfig config, String... roles) {
     if (roles == null || roles.length == 0) {
       throw new IllegalArgumentException("At least one role must be provided");
     }
-    this.authenticated = new Authenticated(oidc);
+
+    this.config = config;
     this.required = Set.of(roles);
   }
 
   @Override
   public void handle(HTTPRequest req, HTTPResponse res, MiddlewareChain chain) throws Exception {
-    authenticated.handle(req, res, (req2, res2) -> {
-      JWT jwt = OpenIDConnect.jwt();
-      Set<String> have = rolesOf(authenticated.oidc, jwt);
-      for (String r : required) {
-        if (have.contains(r)) {
-          chain.next(req2, res2);
-          return;
-        }
-      }
-      res2.setStatus(403);
-    });
-  }
+    // If there is no current JWT, that means the Authenticated handler was never run
+    if (!Tools.CURRENT_JWT.isBound()) {
+      res.setStatus(401);
+      return;
+    }
 
-  /**
-   * Applies the OIDC config's {@code roleExtractor} and coerces the result to a {@link Set}.
-   */
-  static Set<String> rolesOf(OpenIDConnect<?> oidc, JWT jwt) {
-    Iterable<String> raw = oidc.config().roleExtractor().apply(jwt);
-    if (raw == null) {
-      return Set.of();
+    var jwt = Tools.CURRENT_JWT.get();
+    var roles = config.roleExtractor().apply(jwt);
+    boolean hasOne = roles.stream().anyMatch(required::contains);
+    if (hasOne) {
+      chain.next(req, res);
+      return;
     }
-    Set<String> out = new HashSet<>();
-    for (String r : raw) {
-      if (r != null) {
-        out.add(r);
-      }
-    }
-    return out;
+
+    res.setStatus(401);
   }
 }

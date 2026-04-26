@@ -38,11 +38,13 @@ public class BodyHandlingTest extends BaseWebTest {
   @Test
   public void body_handlerReceivesParsedBody() throws Exception {
     try (var web = new Web()) {
-      web.post("/echo", (_, res, body) -> {
+      BodyHandler<String> handler = (_, res, body) -> {
         res.setStatus(200);
         res.setHeader("X-Body-Length", String.valueOf(body.length()));
         res.setHeader("X-Body-Content", body);
-      }, STRING_SUPPLIER);
+      };
+
+      web.route(List.of("GET"), "/echo", handler, STRING_SUPPLIER);
       web.start(PORT);
 
       HttpResponse<String> response = sendWithBody("POST", "/echo", "hello world");

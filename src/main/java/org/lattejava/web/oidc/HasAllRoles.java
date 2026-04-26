@@ -7,38 +7,45 @@ package org.lattejava.web.oidc;
 
 import module java.base;
 import module org.lattejava.http;
-
-import org.lattejava.jwt.domain.JWT;
-import org.lattejava.web.*;
+import module org.lattejava.web;
 
 /**
- * Middleware that requires a valid session AND every named role. Unauthenticated requests trigger the same
- * login-redirect flow as {@link Authenticated}; authenticated requests missing any required role receive a 403.
+ * Middleware that requires a valid session AND every named role.
+ * <p>
+ * Unauthenticated requests return a 401 rather than a login request since they represent a misconfigured middleware
+ * chain. Routes should always call OpenIDConnect.authenticated() before this middleware to ensure the user is logged
+ * in.
  *
  * @author Brian Pontarelli
  */
 public class HasAllRoles implements Middleware {
-  private final Authenticated authenticated;
+  private final OIDCConfig config;
   private final Set<String> required;
 
-  public HasAllRoles(OpenIDConnect<?> oidc, String... roles) {
+  HasAllRoles(OIDCConfig config, String... roles) {
     if (roles == null || roles.length == 0) {
       throw new IllegalArgumentException("At least one role must be provided");
     }
-    this.authenticated = new Authenticated(oidc);
+
+    this.config = config;
     this.required = Set.of(roles);
   }
 
   @Override
   public void handle(HTTPRequest req, HTTPResponse res, MiddlewareChain chain) throws Exception {
-    authenticated.handle(req, res, (req2, res2) -> {
-      JWT jwt = OpenIDConnect.jwt();
-      Set<String> have = HasAnyRole.rolesOf(authenticated.oidc, jwt);
-      if (have.containsAll(required)) {
-        chain.next(req2, res2);
-        return;
-      }
-      res2.setStatus(403);
-    });
+    if (!Tools.CURRENT_JWT.isBound()) {
+      res.setStatus(401);
+      return;
+    }
+
+    var jwt = Tools.CURRENT_JWT.get();
+    var roles = config.roleExtractor().apply(jwt);
+    boolean hasAll = roles.containsAll(required);
+    if (hasAll) {
+      chain.next(req, res);
+      return;
+    }
+
+    res.setStatus(401);
   }
 }

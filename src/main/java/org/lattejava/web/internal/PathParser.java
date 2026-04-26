@@ -5,7 +5,7 @@
  */
 package org.lattejava.web.internal;
 
-import java.util.*;
+import module java.base;
 
 /**
  * Validates path specifications and parses them into a list of {@link Segment}s using a character-by-character finite
