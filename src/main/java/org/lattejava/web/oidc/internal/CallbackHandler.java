@@ -2,8 +2,8 @@ package org.lattejava.web.oidc.internal;
 
 import module com.fasterxml.jackson.databind;
 import module java.base;
-import module jwt;
 import module org.lattejava.http;
+import module org.lattejava.jwt;
 import module org.lattejava.web;
 
 /**

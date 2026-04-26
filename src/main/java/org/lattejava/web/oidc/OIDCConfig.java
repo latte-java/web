@@ -6,11 +6,9 @@
 package org.lattejava.web.oidc;
 
 import module java.base;
-
-import org.lattejava.http.server.*;
-import org.lattejava.jwt.*;
-import org.lattejava.jwt.oauth2.*;
-import org.lattejava.web.oidc.internal.*;
+import module org.lattejava.http;
+import module org.lattejava.jwt;
+import module org.lattejava.web;
 
 /**
  * Configuration for an {@link OIDC} instance. Use {@link #builder()} to construct.

@@ -6,8 +6,8 @@
 package org.lattejava.web.oidc;
 
 import module java.base;
-import module jwt;
 import module org.lattejava.http;
+import module org.lattejava.jwt;
 import module org.lattejava.web;
 
 import org.lattejava.web.oidc.internal.CallbackHandler;
