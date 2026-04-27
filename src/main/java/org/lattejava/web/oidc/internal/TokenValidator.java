@@ -18,7 +18,7 @@ public class TokenValidator {
     // If we are validating the access-token, verify it as a JWT
     if (!accessToken || config.validateAccessToken()) {
       try {
-        var jwt = new JWTDecoder().decode(token, jwks, this::validateJWT);
+        var jwt = JWT.decode(token, jwks, this::validateJWT);
         return new Result.Valid(jwt);
       } catch (Exception e) {
         return new Result.Invalid();
@@ -36,25 +36,23 @@ public class TokenValidator {
       if (status == 200) {
         JsonNode json = Tools.MAPPER.readTree(res.body());
         var jwt = Tools.userinfoToJWT(json);
-        if (!validateJWT(jwt)) {
-          return new Result.Invalid();
-        }
-
         return new Result.Valid(jwt);
       }
 
-      if (status == 401) {
-        return new Result.Invalid();
+      if (status >= 500 && status <= 599) {
+        return new Result.NetworkError();
       }
 
-      return new Result.NetworkError();
+      return new Result.Invalid();
     } catch (Exception e) {
       return new Result.NetworkError();
     }
   }
 
-  private boolean validateJWT(JWT jwt) {
-    return jwt.audience().contains(config.clientId());
+  private void validateJWT(JWT jwt) {
+    if (!jwt.audience().contains(config.clientId())) {
+      throw new InvalidJWTException("The aud claim " + jwt.audience() + " does not contain the client id [" + config.clientId() + "]");
+    }
   }
 
   /**

@@ -17,6 +17,8 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 public class CallbackTest extends BaseWebTest {
+  private static final int MOCK_PORT = 9099;
+
   private static OIDC<?> oidc;
 
   @BeforeClass
@@ -169,6 +171,66 @@ public class CallbackTest extends BaseWebTest {
       assertNotNull(refresh, "Expected refresh_token cookie");
       assertTrue(refresh.isHttpOnly(), "refresh_token should be HttpOnly");
       assertEquals(refresh.getMaxAge(), Long.valueOf(Duration.ofDays(30).toSeconds()));
+    }
+  }
+
+  @Test
+  public void tokenEndpointReturnsBadIDToken_redirectsWithInvalidIDTokenError() throws Exception {
+    try (MockIdP mock = new MockIdP(MOCK_PORT)) {
+      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
+                                               .issuer(mock.issuer())
+                                               .clientId("c")
+                                               .clientSecret("s")
+                                               .build());
+      mock.onTokenEndpoint(200, "{\"access_token\":\"opaque\",\"id_token\":\"not.a.jwt\",\"expires_in\":3600}");
+
+      try (var web = new Web()) {
+        web.install(mockOIDC);
+        web.start(PORT);
+
+        HttpResponse<String> res = get("/oidc/return?code=code&state=abc", "oidc_state=abc");
+        assertOIDCErrorRedirect(res, "invalid_id_token", "Invalid ID token");
+      }
+    }
+  }
+
+  @Test
+  public void tokenEndpointReturnsMissingTokens_redirectsWithTokenExchangeFailedError() throws Exception {
+    try (MockIdP mock = new MockIdP(MOCK_PORT)) {
+      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
+                                               .issuer(mock.issuer())
+                                               .clientId("c")
+                                               .clientSecret("s")
+                                               .build());
+      mock.onTokenEndpoint(200, "{\"expires_in\":3600}");
+
+      try (var web = new Web()) {
+        web.install(mockOIDC);
+        web.start(PORT);
+
+        HttpResponse<String> res = get("/oidc/return?code=code&state=abc", "oidc_state=abc");
+        assertOIDCErrorRedirect(res, "token_exchange_failed", "Token exchange failed");
+      }
+    }
+  }
+
+  @Test
+  public void tokenEndpointReturnsNon2xx_redirectsWithTokenExchangeFailedError() throws Exception {
+    try (MockIdP mock = new MockIdP(MOCK_PORT)) {
+      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
+                                               .issuer(mock.issuer())
+                                               .clientId("c")
+                                               .clientSecret("s")
+                                               .build());
+      mock.onTokenEndpoint(400, "{\"error\":\"invalid_request\"}");
+
+      try (var web = new Web()) {
+        web.install(mockOIDC);
+        web.start(PORT);
+
+        HttpResponse<String> res = get("/oidc/return?code=code&state=abc", "oidc_state=abc");
+        assertOIDCErrorRedirect(res, "token_exchange_failed", "Token exchange failed");
+      }
     }
   }
 }

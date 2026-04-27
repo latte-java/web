@@ -275,11 +275,11 @@ The error codes are stable identifiers; descriptions are the default English tex
 
 `validate(token, accessTokenFlag)` decides between local JWT validation and userinfo-based validation based on `accessTokenFlag` and `config.validateAccessToken()`:
 
-- If `!accessTokenFlag || config.validateAccessToken()`: `new JWTDecoder().decode(token, jwks, this::validateJWT)`. `validateJWT` returns `true` iff `jwt.audience().contains(config.clientId())`. Any decode/verify exception → `Result.Invalid()`. (Signature, `iss`, `exp`, `nbf` checks come from `JWTDecoder` and the JWKS-backed verifier; the application layer adds the audience check.)
-- Otherwise (`accessTokenFlag=true` AND `validateAccessToken=false`): `GET userinfoEndpoint` with `Authorization: Bearer <token>` via the shared `Tools.HTTP` client.
-  - 200 → parse the body, wrap into a `JWT` via `Tools.userinfoToJWT` (claims copied verbatim from the JSON body, signature empty), run the audience check, return `Result.Valid(jwt)` if it passes else `Result.Invalid`.
-  - 401 → `Result.Invalid`.
-  - Any other status, exception, or unreadable body → `Result.NetworkError`.
+- If `!accessTokenFlag || config.validateAccessToken()` (i.e., the JWT validation path): `JWT.decode(token, jwks, this::validateJWT)`. `validateJWT` is a `Consumer<JWT>` — it throws `InvalidJWTException` if `jwt.audience()` doesn't contain `config.clientId()`, otherwise it returns silently. Any decode/verify exception (signature, expiry, issuer, audience) → `Result.Invalid()`. (Signature, `iss`, `exp`, `nbf` checks come from `JWT.decode` against the JWKS-backed verifier; the application layer adds the audience check.)
+- Otherwise (`accessTokenFlag=true` AND `validateAccessToken=false`, i.e., the userinfo path): `GET userinfoEndpoint` with `Authorization: Bearer <token>` via the shared `Tools.HTTP` client.
+  - `200` → parse the body, wrap into a `JWT` via `Tools.userinfoToJWT` (claims copied verbatim from the JSON body, signature empty), return `Result.Valid(jwt)`. **No audience check is run** — the IdP has already validated the token by returning 200, and `aud` isn't in the userinfo response anyway.
+  - `5xx` or any thrown exception (network failure, unreadable body) → `Result.NetworkError` (which the `Authenticated` middleware translates to `503`).
+  - Any other status (`400`, `401`, `403`, etc.) → `Result.Invalid` (triggers the refresh flow).
 
 The validator returns a sealed `Result` (`Valid` / `Invalid` / `NetworkError`); `Authenticated` switches on those.
 
@@ -447,9 +447,9 @@ All refresh tests need controlled token-endpoint responses.
 - **[Mock]** Refreshed access token fails signature verification → clear auth cookies, set return-to, redirect to `loginPath`.
 
 ### Userinfo-based validation (`validateAccessToken=false`)
-- **[Local]** `validateAccessToken=false` + no `userinfoEndpoint` resolvable → `IllegalStateException` at `Builder.build()`.
-- **[FA]** Access token + 200 from userinfo → valid; userinfo response wrapped as a JWT and bound to ScopedValue; request proceeds.
-- **[FA]** Access token + 401 from userinfo → `Result.Invalid` → refresh flow → login redirect path.
+- **[Mock]** `validateAccessToken=false` + discovery doc that omits `userinfo_endpoint` → `IllegalStateException` at `Builder.build()`.
+- **[FA]** Access token + 200 from userinfo → valid; userinfo response wrapped as a JWT (no audience check) and bound to ScopedValue; request proceeds.
+- **[FA]** Tampered access token (FA returns 4xx) → `Result.Invalid` → refresh flow → login redirect path.
 - **[Mock]** Access token + 5xx/network error from userinfo → `Result.NetworkError` → 503, no cookie changes.
 
 ### Logout

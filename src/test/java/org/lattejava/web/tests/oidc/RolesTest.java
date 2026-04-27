@@ -28,18 +28,6 @@ public class RolesTest extends BaseWebTest {
     oidc = OIDC.create(config);
   }
 
-  private static HttpResponse<String> get(String path, String accessToken) throws Exception {
-    try (HttpClient client = HttpClient.newBuilder()
-                                       .followRedirects(HttpClient.Redirect.NEVER)
-                                       .build()) {
-      HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(BASE_URL + path)).GET();
-      if (accessToken != null) {
-        req.header("Cookie", "access_token=" + accessToken);
-      }
-      return client.send(req.build(), HttpResponse.BodyHandlers.ofString());
-    }
-  }
-
   @Test
   public void customRoleExtractor_resolvesNestedRealmAccessRoles_forKeycloakApp() throws Exception {
     var config = OIDCConfig.builder()
@@ -68,7 +56,7 @@ public class RolesTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      assertEquals(get("/admin/page", token).statusCode(), 200);
+      assertEquals(get("/admin/page", "access_token=" + token).statusCode(), 200);
     }
   }
 
@@ -89,7 +77,7 @@ public class RolesTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      assertEquals(get("/protected/page", token).statusCode(), 200);
+      assertEquals(get("/protected/page", "access_token=" + token).statusCode(), 200);
     }
   }
 
@@ -105,7 +93,7 @@ public class RolesTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      assertEquals(get("/protected/page", token).statusCode(), 403);
+      assertEquals(get("/protected/page", "access_token=" + token).statusCode(), 403);
     }
   }
 
@@ -135,7 +123,7 @@ public class RolesTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      assertEquals(get("/admin/dashboard", token).statusCode(), 200);
+      assertEquals(get("/admin/dashboard", "access_token=" + token).statusCode(), 200);
     }
   }
 
@@ -151,7 +139,7 @@ public class RolesTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      assertEquals(get("/admin/dashboard", token).statusCode(), 403);
+      assertEquals(get("/admin/dashboard", "access_token=" + token).statusCode(), 403);
     }
   }
 

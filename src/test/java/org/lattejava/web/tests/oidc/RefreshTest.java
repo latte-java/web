@@ -17,6 +17,8 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 public class RefreshTest extends BaseWebTest {
+  private static final int MOCK_PORT = 9099;
+
   private static OIDC<?> fastOIDC;
   private static OIDC<?> rotatingOIDC;
   private static OIDC<?> standardOIDC;
@@ -48,18 +50,6 @@ public class RefreshTest extends BaseWebTest {
     assertEquals(returnTo.getValue(), BASE_URL + "/protected/page");
   }
 
-  private static HttpResponse<String> get(String cookieHeader) throws Exception {
-    try (HttpClient client = HttpClient.newBuilder()
-                                       .followRedirects(HttpClient.Redirect.NEVER)
-                                       .build()) {
-      HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(BASE_URL + "/protected/page")).GET();
-      if (cookieHeader != null) {
-        req.header("Cookie", cookieHeader);
-      }
-      return client.send(req.build(), HttpResponse.BodyHandlers.ofString());
-    }
-  }
-
   @Test
   public void expiredAccessToken_validRefreshToken_refreshSucceeds_andSetsNewAccessTokenCookie() throws Exception {
     Tokens tokens = login(USER_EMAIL, DEFAULT_PASSWORD, FAST_APP_ID);
@@ -74,7 +64,7 @@ public class RefreshTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      HttpResponse<String> res = get("access_token=" + tokens.accessToken() + "; refresh_token=" + tokens.refreshToken());
+      HttpResponse<String> res = get("/protected/page", "access_token=" + tokens.accessToken() + "; refresh_token=" + tokens.refreshToken());
       assertEquals(res.statusCode(), 200);
 
       Cookie newAccess = getCookie(res, "access_token");
@@ -93,7 +83,7 @@ public class RefreshTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      HttpResponse<String> res = get("access_token=tampered; refresh_token=tampered");
+      HttpResponse<String> res = get("/protected/page", "access_token=tampered; refresh_token=tampered");
       assertLoginRedirect(res);
 
       for (String name : List.of("access_token", "id_token", "refresh_token")) {
@@ -114,7 +104,7 @@ public class RefreshTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      HttpResponse<String> res = get("access_token=tampered");
+      HttpResponse<String> res = get("/protected/page", "access_token=tampered");
       assertLoginRedirect(res);
     }
   }
@@ -132,7 +122,7 @@ public class RefreshTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      HttpResponse<String> res = get("access_token=tampered; refresh_token=" + tokens.refreshToken());
+      HttpResponse<String> res = get("/protected/page", "access_token=tampered; refresh_token=" + tokens.refreshToken());
       assertEquals(res.statusCode(), 200);
 
       Cookie newRefresh = getCookie(res, "refresh_token");
@@ -156,12 +146,42 @@ public class RefreshTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      HttpResponse<String> res = get("access_token=tampered; refresh_token=" + tokens.refreshToken());
+      HttpResponse<String> res = get("/protected/page", "access_token=tampered; refresh_token=" + tokens.refreshToken());
       assertEquals(res.statusCode(), 200);
 
       Cookie newId = getCookie(res, "id_token");
       assertNotNull(newId, "Expected refreshed id_token cookie");
       assertFalse(newId.isHttpOnly(), "id_token should not be HttpOnly");
+    }
+  }
+
+  @Test
+  public void tokenEndpointReturns5xx_clearsAuthCookies_redirectsToLogin() throws Exception {
+    try (MockIdP mock = new MockIdP(MOCK_PORT)) {
+      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
+                                               .issuer(mock.issuer())
+                                               .clientId("c")
+                                               .clientSecret("s")
+                                               .build());
+      mock.onTokenEndpoint(500, "{\"error\":\"server_error\"}");
+
+      try (var web = new Web()) {
+        web.install(mockOIDC);
+        web.prefix("/protected", p -> {
+          p.install(mockOIDC.authenticated());
+          p.get("/page", (_, res) -> res.setStatus(200));
+        });
+        web.start(PORT);
+
+        HttpResponse<String> res = get("/protected/page", "access_token=tampered; refresh_token=any");
+        assertLoginRedirect(res);
+
+        for (String name : List.of("access_token", "id_token", "refresh_token")) {
+          Cookie c = getCookie(res, name);
+          assertNotNull(c, "Expected cleared [" + name + "] cookie");
+          assertEquals(c.getMaxAge(), Long.valueOf(0L));
+        }
+      }
     }
   }
 }

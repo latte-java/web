@@ -14,6 +14,18 @@ public abstract class BaseWebTest {
 
   public static final String BASE_URL = "http://localhost:" + PORT;
 
+  public static HttpResponse<String> get(String path, String cookieHeader) throws Exception {
+    try (HttpClient client = HttpClient.newBuilder()
+                                       .followRedirects(HttpClient.Redirect.NEVER)
+                                       .build()) {
+      HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(BASE_URL + path)).GET();
+      if (cookieHeader != null) {
+        req.header("Cookie", cookieHeader);
+      }
+      return client.send(req.build(), HttpResponse.BodyHandlers.ofString());
+    }
+  }
+
   public static Cookie getCookie(HttpResponse<?> res, String name) {
     String prefix = name + "=";
     return res.headers()
