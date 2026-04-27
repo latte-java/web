@@ -46,17 +46,6 @@ public class CallbackTest extends BaseWebTest {
     assertEquals(params.get("oidc_error_description"), expectedDescription);
   }
 
-  private static HttpResponse<String> sendCallback(String queryString, String cookieHeader) throws Exception {
-    try (HttpClient client = HttpClient.newBuilder()
-                                       .followRedirects(HttpClient.Redirect.NEVER)
-                                       .build()) {
-      HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(BASE_URL + "/oidc/return" + queryString)).GET();
-      if (cookieHeader != null) {
-        builder.header("Cookie", cookieHeader);
-      }
-      return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-    }
-  }
 
   @Test
   public void blankCode_redirectsToLandingWithOIDCError() throws Exception {
@@ -64,7 +53,7 @@ public class CallbackTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = sendCallback("?state=abc&code=", "oidc_state=abc");
+      HttpResponse<String> res = get("/oidc/return?state=abc&code=", "oidc_state=abc");
       assertOIDCErrorRedirect(res, "missing_code", "Missing authorization code");
     }
   }
@@ -75,11 +64,8 @@ public class CallbackTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = sendCallback(
-          "?error=access_denied&error_description=user+cancelled",
-          "oidc_state=abc; oidc_return_to=" + BASE_URL + "/somewhere"
-      );
-
+      HttpResponse<String> res = get("/oidc/return?error=access_denied&error_description=user+cancelled",
+          "oidc_state=abc; oidc_return_to=" + BASE_URL + "/somewhere");
       assertOIDCErrorRedirect(res, "access_denied", "user cancelled");
 
       for (String name : List.of("access_token", "id_token", "refresh_token", "oidc_state", "oidc_return_to")) {
@@ -96,7 +82,7 @@ public class CallbackTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = sendCallback("?state=abc", "oidc_state=abc");
+      HttpResponse<String> res = get("/oidc/return?state=abc", "oidc_state=abc");
       assertOIDCErrorRedirect(res, "missing_code", "Missing authorization code");
     }
   }
@@ -107,7 +93,7 @@ public class CallbackTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = sendCallback("?state=abc&code=xyz", null);
+      HttpResponse<String> res = get("/oidc/return?state=abc&code=xyz", null);
       assertOIDCErrorRedirect(res, "invalid_state", "Invalid state");
     }
   }
@@ -118,7 +104,7 @@ public class CallbackTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = sendCallback("?state=abc&code=xyz", "oidc_state=different");
+      HttpResponse<String> res = get("/oidc/return?state=abc&code=xyz", "oidc_state=different");
       assertOIDCErrorRedirect(res, "invalid_state", "Invalid state");
     }
   }
@@ -131,11 +117,8 @@ public class CallbackTest extends BaseWebTest {
 
       var auth = fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
 
-      HttpResponse<String> res = sendCallback(
-          "?code=" + auth.code() + "&state=" + auth.state(),
-          "oidc_state=" + auth.state() + "; oidc_return_to=" + BASE_URL + "/dashboard"
-      );
-
+      HttpResponse<String> res = get("/oidc/return?code=" + auth.code() + "&state=" + auth.state(),
+          "oidc_state=" + auth.state() + "; oidc_return_to=" + BASE_URL + "/dashboard");
       assertEquals(res.statusCode(), 302);
       assertEquals(res.headers().firstValue("Location").orElse(null), BASE_URL + "/dashboard");
     }
@@ -149,11 +132,8 @@ public class CallbackTest extends BaseWebTest {
 
       var auth = fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
 
-      HttpResponse<String> res = sendCallback(
-          "?code=" + auth.code() + "&state=" + auth.state(),
-          "oidc_state=" + auth.state()
-      );
-
+      HttpResponse<String> res = get("/oidc/return?code=" + auth.code() + "&state=" + auth.state(),
+          "oidc_state=" + auth.state());
       assertEquals(res.statusCode(), 302);
       assertEquals(res.headers().firstValue("Location").orElse(null), "/");
 

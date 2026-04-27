@@ -29,22 +29,13 @@ public class LoginRedirectTest extends BaseWebTest {
     oidc = OIDC.create(config);
   }
 
-  private static HttpResponse<String> noFollow(String url) throws Exception {
-    HttpClient client = HttpClient.newBuilder()
-                                  .followRedirects(HttpClient.Redirect.NEVER)
-                                  .build();
-    HttpRequest req = HttpRequest.newBuilder(URI.create(url)).GET().build();
-    return client.send(req, HttpResponse.BodyHandlers.ofString());
-  }
-
   @Test
   public void authorizeURL_codeChallenge_matchesSHA256OfState() throws Exception {
     try (var web = new Web()) {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = noFollow(BASE_URL + "/login");
-
+      HttpResponse<String> res = get("/login", null);
       Cookie state = getCookie(res, "oidc_state");
       assertNotNull(state, "Expected oidc_state cookie");
 
@@ -65,9 +56,9 @@ public class LoginRedirectTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = noFollow(BASE_URL + "/login");
-
+      HttpResponse<String> res = get("/login", null);
       assertEquals(res.statusCode(), 302);
+
       String location = res.headers().firstValue("Location").orElseThrow();
       URI uri = URI.create(location);
       String base = uri.getScheme() + "://" + uri.getAuthority() + uri.getPath();
@@ -90,8 +81,7 @@ public class LoginRedirectTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      HttpResponse<String> res = noFollow(BASE_URL + "/login");
-
+      HttpResponse<String> res = get("/login", null);
       Cookie state = getCookie(res, "oidc_state");
       assertNotNull(state, "Expected oidc_state cookie");
 
@@ -115,8 +105,7 @@ public class LoginRedirectTest extends BaseWebTest {
       });
       web.start(PORT);
 
-      HttpResponse<String> res = noFollow(BASE_URL + "/protected/foo");
-
+      HttpResponse<String> res = get("/protected/foo", null);
       assertEquals(res.statusCode(), 302);
       assertEquals(res.headers().firstValue("Location").orElse(null), "/login");
 
