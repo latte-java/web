@@ -191,8 +191,7 @@ public class PathParser {
     if (c == '!' || c == '$' || c == '&' || c == '\'' || c == '(' || c == ')') return true;
     if (c == '*' || c == '+' || c == ',' || c == ';' || c == '=') return true;
     // extra
-    if (c == ':' || c == '@') return true;
-    return false;
+    return c == ':' || c == '@';
   }
 
   private enum State {

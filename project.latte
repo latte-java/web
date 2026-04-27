@@ -3,13 +3,18 @@ project(group: "org.lattejava", name: "web", version: "0.1.0", licenses: ["MIT"]
     standard()
   }
 
+  publishWorkflow {
+    s3(endpoint: global.latteRepositoryS3URL, bucket: "latte-repository",
+        accessKeyId: global.latteRepositoryS3AccessKeyID, secretAccessKey: global.latteRepositoryS3SecretAccessKey)
+  }
+
   dependencies {
     group(name: "compile") {
       dependency(id: "com.fasterxml.jackson.core:jackson-annotations:2.19.2")
       dependency(id: "com.fasterxml.jackson.core:jackson-core:2.19.2")
       dependency(id: "com.fasterxml.jackson.core:jackson-databind:2.19.2")
       dependency(id: "org.lattejava:http:0.1.4")
-      dependency(id: "org.lattejava:jwt:0.1.0-{integration}")
+      dependency(id: "org.lattejava:jwt:0.1.0")
     }
     group(name: "test-compile", export: false) {
       dependency(id: "org.testng:testng:7.12.0")
@@ -49,7 +54,7 @@ target(name: "int", description: "Releases a local integration build of the proj
   dependency.integrate()
 }
 
-target(name: "release", description: "Releases a full version of the project", dependsOn: ["clean", "test", "format"]) {
+target(name: "release", description: "Releases a full version of the project", dependsOn: ["clean", "test"]) {
   release.release()
 }
 

@@ -15,10 +15,8 @@ import module org.lattejava.web;
  * @author Brian Pontarelli
  */
 public class MiddlewareChainImpl implements MiddlewareChain {
-  private final List<Middleware> middlewares;
-
   private final Handler handler;
-
+  private final List<Middleware> middlewares;
   private int index = 0;
 
   public MiddlewareChainImpl(List<Middleware> middlewares, Handler handler) {

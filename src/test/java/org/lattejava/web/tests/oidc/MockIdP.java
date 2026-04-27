@@ -5,13 +5,12 @@
  */
 package org.lattejava.web.tests.oidc;
 
-import module java.base;
 import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * In-process mock IdP used by {@code [Mock]}-tagged OIDC tests. Stands up a {@link Web} instance on a configurable
- * port that serves:
+ * In-process mock IdP used by {@code [Mock]}-tagged OIDC tests. Stands up a {@link Web} instance on a configurable port
+ * that serves:
  * <ul>
  *   <li>{@code GET /.well-known/openid-configuration} — minimal OIDC discovery document. The {@code userinfo_endpoint}
  *       can be omitted via {@link #MockIdP(int, boolean)} to drive the {@code validateAccessToken=false + missing

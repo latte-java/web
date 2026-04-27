@@ -6,7 +6,6 @@
 package org.lattejava.web.tests.oidc;
 
 import module java.base;
-import module java.net.http;
 import module org.lattejava.web;
 import module org.testng;
 
