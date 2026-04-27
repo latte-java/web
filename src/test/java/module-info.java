@@ -2,6 +2,7 @@ module org.lattejava.web.tests {
   requires com.fasterxml.jackson.databind;
   requires java.net.http;
   requires org.lattejava.http;
+  requires org.lattejava.jwt;
   requires org.lattejava.web;
   requires org.testng;
 

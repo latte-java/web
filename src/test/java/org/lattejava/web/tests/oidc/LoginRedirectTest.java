@@ -13,21 +13,18 @@ import module org.testng;
 
 import org.lattejava.web.tests.*;
 
+import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 public class LoginRedirectTest extends BaseWebTest {
-  private static final String CLIENT_ID = "10000000-0000-0000-0000-000000000002";
-  private static final String CLIENT_SECRET = "standard-app-secret-1234567890abcdef";
-  private static final String ISSUER = "http://localhost:9011/10000000-0000-0000-0000-000000000001";
-
   private static OIDC<?> oidc;
 
   @BeforeClass
   public static void setupOIDC() {
     var config = OIDCConfig.builder()
-                           .issuer(ISSUER)
-                           .clientId(CLIENT_ID)
-                           .clientSecret(CLIENT_SECRET)
+                           .issuer(STANDARD_ISSUER)
+                           .clientId(STANDARD_APP_ID)
+                           .clientSecret(STANDARD_APP_SECRET)
                            .build();
     oidc = OIDC.create(config);
   }
@@ -78,7 +75,7 @@ public class LoginRedirectTest extends BaseWebTest {
 
       Map<String, String> params = parseQuery(uri.getRawQuery());
       assertEquals(params.get("response_type"), "code");
-      assertEquals(params.get("client_id"), CLIENT_ID);
+      assertEquals(params.get("client_id"), STANDARD_APP_ID);
       assertEquals(params.get("redirect_uri"), BASE_URL + "/oidc/return");
       assertEquals(params.get("scope"), "openid profile email offline_access");
       assertEquals(params.get("code_challenge_method"), "S256");
