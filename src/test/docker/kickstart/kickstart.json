@@ -36,7 +36,7 @@
       "body": {
         "tenant": {
           "name": "standard",
-          "issuer": "acme.com",
+          "issuer": "http://localhost:9011/10000000-0000-0000-0000-000000000001",
           "jwtConfiguration": {
             "accessTokenKeyId": "#{asymmetricKeyId}",
             "idTokenKeyId": "#{asymmetricKeyId}",

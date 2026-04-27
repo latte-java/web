@@ -45,7 +45,7 @@ public class BodyHandlingTest extends BaseWebTest {
         res.setHeader("X-Body-Content", body);
       };
 
-      web.route(List.of("GET"), "/echo", handler, STRING_SUPPLIER);
+      web.post("/echo", handler, STRING_SUPPLIER);
       web.start(PORT);
 
       HttpResponse<String> response = sendWithBody("POST", "/echo", "hello world");

@@ -26,12 +26,10 @@ import module org.lattejava.web;
  */
 public class Authenticated implements Middleware {
   private final OIDCConfig config;
-  private final JWKS jwks;
   private final TokenValidator tokenValidator;
 
   Authenticated(OIDCConfig config, JWKS jwks) {
     this.config = config;
-    this.jwks = jwks;
     this.tokenValidator = new TokenValidator(config, jwks);
   }
 

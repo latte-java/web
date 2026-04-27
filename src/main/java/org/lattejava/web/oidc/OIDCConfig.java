@@ -293,32 +293,31 @@ public record OIDCConfig(
         return;
       }
 
-      AuthorizationServerMetaData meta;
+      OpenIDConnectConfiguration config;
       try {
-        var endpoint = Tools.stripTrailingSlash(issuer) + "/.well-known/openid-configuration";
-        meta = ServerMetaDataHelper.retrieveFromWellKnownConfiguration(endpoint);
+        config = OpenIDConnect.discover(issuer);
       } catch (Exception e) {
         throw new IllegalStateException("Failed to fetch OIDC discovery document for issuer [" + issuer + "]", e);
       }
 
-      if (authorizeEndpoint == null && meta.authorizationEndpoint() != null) {
-        authorizeEndpoint = URI.create(meta.authorizationEndpoint());
+      if (authorizeEndpoint == null && config.authorizationEndpoint() != null) {
+        authorizeEndpoint = URI.create(config.authorizationEndpoint());
       }
 
-      if (tokenEndpoint == null && meta.tokenEndpoint() != null) {
-        tokenEndpoint = URI.create(meta.tokenEndpoint());
+      if (tokenEndpoint == null && config.tokenEndpoint() != null) {
+        tokenEndpoint = URI.create(config.tokenEndpoint());
       }
 
-      if (userinfoEndpoint == null && meta.otherClaims().get("userinfo_endpoint") instanceof String s) {
-        userinfoEndpoint = URI.create(s);
+      if (userinfoEndpoint == null && config.userinfoEndpoint() != null) {
+        userinfoEndpoint = URI.create(config.userinfoEndpoint());
       }
 
-      if (jwksEndpoint == null && meta.jwksUri() != null) {
-        jwksEndpoint = URI.create(meta.jwksUri());
+      if (jwksEndpoint == null && config.jwksURI() != null) {
+        jwksEndpoint = URI.create(config.jwksURI());
       }
 
-      if (logoutEndpoint == null && meta.otherClaims().get("end_session_endpoint") instanceof String s) {
-        logoutEndpoint = URI.create(s);
+      if (logoutEndpoint == null && config.endSessionEndpoint() != null) {
+        logoutEndpoint = URI.create(config.endSessionEndpoint());
       }
     }
   }

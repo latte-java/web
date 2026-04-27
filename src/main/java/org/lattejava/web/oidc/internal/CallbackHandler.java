@@ -78,7 +78,7 @@ public class CallbackHandler implements Handler {
 
     // Always verify the id_token signature (OIDC spec requires it).
     try {
-      JWT.parse(idToken, jwks);
+      new JWTDecoder().decode(idToken, jwks);
     } catch (Exception e) {
       res.setStatus(400);
       return;
@@ -87,7 +87,7 @@ public class CallbackHandler implements Handler {
     // When validateAccessToken=true, verify the access-token JWT too.
     if (config.validateAccessToken()) {
       try {
-        JWT.parse(accessToken, jwks);
+        new JWTDecoder().decode(idToken, jwks);
       } catch (Exception e) {
         res.setStatus(400);
         return;

@@ -36,17 +36,22 @@ public class OIDCConfigTest {
   @Test
   public void builder_defaults_setSensibleValues() {
     var config = OIDCConfig.builder()
-                           .issuer("https://idp.example.com")
+                           .issuer("http://localhost:9011/10000000-0000-0000-0000-000000000001")
                            .clientId("my-client")
                            .clientSecret("secret")
                            .build();
+
+    assertEquals(config.authorizeEndpoint(), URI.create("http://localhost:9011/oauth2/authorize"));
+    assertEquals(config.jwksEndpoint(), URI.create("http://localhost:9011/.well-known/jwks.json"));
+    assertEquals(config.logoutEndpoint(), URI.create("http://localhost:9011/oauth2/logout"));
+    assertEquals(config.tokenEndpoint(), URI.create("http://localhost:9011/oauth2/token"));
 
     assertEquals(config.scopes(), List.of("openid", "profile", "email", "offline_access"));
     assertTrue(config.validateAccessToken());
     assertEquals(config.postLoginLanding(), "/");
     assertEquals(config.postLogoutLanding(), "/");
     assertEquals(config.callbackPath(), "/oidc/return");
-    assertEquals(config.logoutPath(), "/oidc/logout");
+    assertEquals(config.logoutPath(), "/logout");
     assertEquals(config.logoutReturnPath(), "/oidc/logout-return");
     assertEquals(config.stateCookieName(), "oidc_state");
     assertEquals(config.accessTokenCookieName(), "access_token");
@@ -76,10 +81,10 @@ public class OIDCConfigTest {
   @Test
   public void builder_localhostHTTPIssuer_permitted() {
     var config = OIDCConfig.builder()
-                           .issuer("http://localhost:9011")
+                           .issuer("http://localhost:9011/10000000-0000-0000-0000-000000000001")
                            .clientId("c").clientSecret("s")
                            .build();
-    assertEquals(config.issuer(), "http://localhost:9011");
+    assertEquals(config.issuer(), "http://localhost:9011/10000000-0000-0000-0000-000000000001");
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)

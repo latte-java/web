@@ -39,11 +39,12 @@ public class OIDC<U> implements Middleware {
   private OIDC(OIDCConfig config, Function<JWT, U> translator) {
     this.config = config;
     this.translator = translator;
-    this.callbackHandler = new CallbackHandler(config);
+    this.jwks = JWKS.fromJWKS(config.jwksEndpoint().toString()).build();
+
+    this.callbackHandler = new CallbackHandler(config, jwks);
     this.loginHandler = new LoginHandler(config);
     this.logoutHandler = new LogoutHandler(config);
     this.logoutReturnHandler = new LogoutReturnHandler(config);
-    this.jwks = JWKS.create(config.jwksEndpoint());
   }
 
   /**

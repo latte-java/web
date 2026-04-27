@@ -18,7 +18,7 @@ public class TokenValidator {
     // If we are validating the access-token, verify it as a JWT
     if (!accessToken || config.validateAccessToken()) {
       try {
-        var jwt = JWT.parse(token, jwks, this::validateJWT);
+        var jwt = new JWTDecoder().decode(token, jwks, this::validateJWT);
         return new Result.Valid(jwt);
       } catch (Exception e) {
         return new Result.Invalid();
