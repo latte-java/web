@@ -9,7 +9,7 @@ import module com.fasterxml.jackson.databind;
 import module java.base;
 import module java.net.http;
 
-import org.lattejava.web.tests.BaseWebTest;
+import org.lattejava.web.tests.*;
 
 /**
  * Constants and helpers for tests that drive the kickstart-provisioned FusionAuth instance at {@code localhost:9011}.
@@ -21,14 +21,19 @@ public final class FusionAuthFixture {
   public static final String API_KEY = "bf69486b-4733-4470-a592-f1bfce7af580";
   public static final String DEFAULT_PASSWORD = "password";
   public static final String FA_BASE_URL = "http://localhost:9011";
+  public static final String KEYCLOAK_APP_ID = "10000000-0000-0000-0000-000000000004";
+  public static final String KEYCLOAK_APP_SECRET = "keycloak-app-secret-1234567890abcdef0";
+  public static final String STANDARD_ADMIN_ID = "10000000-0000-0000-0000-000000000011";
   public static final String STANDARD_APP_ID = "10000000-0000-0000-0000-000000000002";
   public static final String STANDARD_APP_SECRET = "standard-app-secret-1234567890abcdef";
   public static final String STANDARD_TENANT_ID = "10000000-0000-0000-0000-000000000001";
-  public static final String STANDARD_USER_ID = "10000000-0000-0000-0000-000000000010";
-  public static final String STANDARD_ADMIN_ID = "10000000-0000-0000-0000-000000000011";
-  public static final String USER_EMAIL = "user@example.com";
   public static final String STANDARD_ISSUER = FA_BASE_URL + "/" + STANDARD_TENANT_ID;
-
+  public static final String STANDARD_USER_ID = "10000000-0000-0000-0000-000000000010";
+  public static final String USER_EMAIL = "user@example.com";
+  private static final Map<String, String> APP_SECRETS = Map.of(
+      KEYCLOAK_APP_ID, KEYCLOAK_APP_SECRET,
+      STANDARD_APP_ID, STANDARD_APP_SECRET
+  );
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private FusionAuthFixture() {
@@ -103,9 +108,70 @@ public final class FusionAuthFixture {
   }
 
   /**
-   * Manually walks a redirect chain on {@code client}, hopping GETs along {@code Location} headers. If a {@code
-   * Location} ever points at {@code redirectURI}, returns the {@code code} query parameter from that target without
-   * actually issuing the request. Otherwise returns {@code null} when the chain ends at a non-redirect response.
+   * Drives the full OIDC authorization-code flow against FusionAuth and returns the issued access token (JWT).
+   * <p>
+   * Walks the hosted-login flow via {@link #fetchAuthorizationCode} to obtain an authorization code, then exchanges
+   * the code at {@code /oauth2/token} (HTTP Basic with the app's {@code client_secret}, PKCE {@code code_verifier}).
+   * This exercises the same code path as {@link org.lattejava.web.oidc.OIDC}'s callback handler — no
+   * {@code /api/login} backdoor — so issued tokens are indistinguishable from the production code's tokens.
+   *
+   * @param email         The user's email.
+   * @param password      The user's password.
+   * @param applicationId The application UUID to authenticate against. Must be one of the kickstart-provisioned
+   *                      apps tracked in {@link #APP_SECRETS}.
+   * @return The access token JWT.
+   */
+  public static String login(String email, String password, String applicationId) throws Exception {
+    String secret = APP_SECRETS.get(applicationId);
+    if (secret == null) {
+      throw new IllegalArgumentException("Unknown applicationId [" + applicationId + "] — add to FusionAuthFixture.APP_SECRETS");
+    }
+
+    String redirectURI = BaseWebTest.BASE_URL + "/oidc/return";
+    AuthorizationCode auth = fetchAuthorizationCode(email, password, applicationId, redirectURI);
+
+    String body = formEncode(Map.of(
+        "grant_type", "authorization_code",
+        "code", auth.code(),
+        "redirect_uri", redirectURI,
+        "code_verifier", auth.state()
+    ));
+    String basic = "Basic " + Base64.getEncoder().encodeToString(
+        (applicationId + ":" + secret).getBytes(StandardCharsets.UTF_8));
+    HttpRequest req = HttpRequest.newBuilder(URI.create(FA_BASE_URL + "/oauth2/token"))
+                                 .header("Authorization", basic)
+                                 .header("Content-Type", "application/x-www-form-urlencoded")
+                                 .POST(HttpRequest.BodyPublishers.ofString(body))
+                                 .build();
+    try (HttpClient client = HttpClient.newHttpClient()) {
+      HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+      if (res.statusCode() != 200) {
+        throw new IllegalStateException("FusionAuth token exchange failed [" + res.statusCode() + "]: [" + res.body() + "]");
+      }
+
+      JsonNode json = MAPPER.readTree(res.body());
+      JsonNode token = json.get("access_token");
+      if (token == null || token.isNull()) {
+        throw new IllegalStateException("FusionAuth token response missing [access_token]: [" + res.body() + "]");
+      }
+      return token.asText();
+    }
+  }
+
+  private static String formEncode(Map<String, String> form) {
+    return form.entrySet()
+               .stream()
+               .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8) + "="
+                   + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
+               .reduce((a, b) -> a + "&" + b)
+               .orElse("");
+  }
+
+  /**
+   * Manually walks a redirect chain on {@code client}, hopping GETs along {@code Location} headers. If a
+   * {@code Location} ever points at {@code redirectURI}, returns the {@code code} query parameter from that target
+   * without actually issuing the request. Otherwise returns {@code null} when the chain ends at a non-redirect
+   * response.
    */
   private static String walkRedirects(HttpClient client, URI current, HttpResponse<String> res, String redirectURI) throws Exception {
     while (res.statusCode() / 100 == 3) {
@@ -128,48 +194,6 @@ public final class FusionAuthFixture {
     }
 
     return null;
-  }
-
-  /**
-   * Authenticates a user via FusionAuth's {@code /api/login} endpoint and returns the issued access token (JWT).
-   *
-   * @param email         The user's email.
-   * @param password      The user's password.
-   * @param applicationId The application UUID to authenticate against.
-   * @return The access token JWT.
-   */
-  public static String login(String email, String password, String applicationId) throws Exception {
-    String body = MAPPER.writeValueAsString(Map.of(
-        "loginId", email,
-        "password", password,
-        "applicationId", applicationId
-    ));
-    HttpRequest req = HttpRequest.newBuilder(URI.create(FA_BASE_URL + "/api/login"))
-                                 .header("Authorization", API_KEY)
-                                 .header("Content-Type", "application/json")
-                                 .header("X-FusionAuth-TenantId", STANDARD_TENANT_ID)
-                                 .POST(HttpRequest.BodyPublishers.ofString(body))
-                                 .build();
-    HttpResponse<String> res = HttpClient.newHttpClient().send(req, HttpResponse.BodyHandlers.ofString());
-    if (res.statusCode() != 200) {
-      throw new IllegalStateException("FusionAuth login failed [" + res.statusCode() + "]: [" + res.body() + "]");
-    }
-
-    JsonNode json = MAPPER.readTree(res.body());
-    JsonNode token = json.get("token");
-    if (token == null || token.isNull()) {
-      throw new IllegalStateException("FusionAuth login response missing [token]: [" + res.body() + "]");
-    }
-    return token.asText();
-  }
-
-  private static String formEncode(Map<String, String> form) {
-    return form.entrySet()
-               .stream()
-               .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8) + "="
-                   + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
-               .reduce((a, b) -> a + "&" + b)
-               .orElse("");
   }
 
   /**

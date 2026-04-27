@@ -46,6 +46,6 @@ public class HasAllRoles implements Middleware {
       return;
     }
 
-    res.setStatus(401);
+    res.setStatus(403);
   }
 }

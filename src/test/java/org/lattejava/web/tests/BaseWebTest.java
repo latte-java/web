@@ -10,9 +10,9 @@ import module java.net.http;
 import module org.lattejava.http;
 
 public abstract class BaseWebTest {
-  protected static final int PORT = 8080;
+  public static final int PORT = 8080;
 
-  protected static final String BASE_URL = "http://localhost:" + PORT;
+  public static final String BASE_URL = "http://localhost:" + PORT;
 
   public static Cookie getCookie(HttpResponse<?> res, String name) {
     String prefix = name + "=";

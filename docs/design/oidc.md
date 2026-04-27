@@ -331,11 +331,11 @@ After `fillIn()` runs, `build()` checks that `authorize`, `token`, and `jwks` ar
 
 Both are public types in `org.lattejava.web.oidc` with package-private constructors; construction goes through `oidc.hasAnyRole(...)` / `oidc.hasAllRoles(...)`.
 
-- They do **not** authenticate. Install `oidc.authenticated()` upstream of these. A request that reaches `HasAnyRole`/`HasAllRoles` without a bound `CURRENT_JWT` is treated as a configuration error and gets `401`.
+- They do **not** authenticate. Install `oidc.authenticated()` upstream of these. A request that reaches `HasAnyRole`/`HasAllRoles` without a bound `CURRENT_JWT` is treated as a configuration error and gets `401` (no auth happened — fail closed).
 - Empty varargs is rejected at construction with `IllegalArgumentException("At least one role must be provided")`.
-- `hasAnyRole(r1, r2, ...)` → pass if the user's role set contains at least one named role; otherwise `401`.
-- `hasAllRoles(r1, r2, ...)` → pass if the user's role set contains every named role; otherwise `401`.
-- (Authorization failures are returned as `401`, not `403`. See "Caveats" below.)
+- `hasAnyRole(r1, r2, ...)` → pass if the user's role set contains at least one named role; otherwise `403`.
+- `hasAllRoles(r1, r2, ...)` → pass if the user's role set contains every named role; otherwise `403`.
+- 401 vs 403: `401` means the request isn't authenticated (no bound JWT); `403` means the request is authenticated but the user lacks the required role(s).
 
 ## Usage
 
@@ -428,9 +428,9 @@ All callback error paths return `302` to `errorPage` with both `oidc_error=<code
 
 ### Role-based protection
 - **[FA]** `hasAnyRole("admin")` with `admin@example.com` → passes.
-- **[FA]** `hasAnyRole("admin")` with `user@example.com` (roles `user`, `moderator`) → 401.
+- **[FA]** `hasAnyRole("admin")` with `user@example.com` (roles `user`, `moderator`) → 403.
 - **[FA]** `hasAllRoles("user", "moderator")` with `user@example.com` → passes.
-- **[FA]** `hasAllRoles("user", "moderator")` with `admin@example.com` (only `admin`) → 401.
+- **[FA]** `hasAllRoles("user", "moderator")` with `admin@example.com` (only `admin`) → 403.
 - **[FA]** Custom `roleExtractor` resolves nested claims correctly. Uses the kickstart-provisioned `keycloak` app (lambda injects `realm_access.roles`).
 - **[Local]** `HasAnyRole` / `HasAllRoles` reached with no bound JWT → 401 (configuration error).
 - **[Local]** Empty varargs → `IllegalArgumentException` at construction.
@@ -469,7 +469,6 @@ All refresh tests need controlled token-endpoint responses.
 
 ## Caveats and deferred
 
-- **Role-check failures return 401, not 403.** Both the missing-JWT misconfiguration case and the failed-role case return `401`. The original design called for `403` on authorization failures, but the current code uses `401` uniformly.
 - **Callback `validateAccessToken=true` re-decodes the id_token, not the access token.** When `validateAccessToken=true`, the callback handler calls `JWTDecoder().decode(idToken, jwks)` a second time rather than decoding the access token. The cookies are still set; the only effect is that the second JWT decode never validates the access token at the callback. The runtime path (`Authenticated` + `TokenValidator`) does validate the access token on every protected request.
 - **No JWKS rotation handling in the OIDC layer.** JWKS is fetched once at `OIDC.create(...)` and never refreshed. Tokens signed with a key not in the cached JWKS will be rejected and trigger the refresh-then-login-redirect path. If the IdP rotates signing keys, restart the app. Enabling `JWKS.scheduledRefresh` / `refreshOnMiss` would address this; not currently exposed via `OIDCConfig`.
 - **No CSRF `state` on IdP logout.** The end-session redirect doesn't include a `state` parameter for the return trip. Acceptable because `logoutReturnPath` only clears cookies and redirects — a forged return doesn't leak or grant anything.
