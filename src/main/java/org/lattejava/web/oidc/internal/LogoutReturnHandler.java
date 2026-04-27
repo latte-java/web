@@ -18,6 +18,6 @@ public class LogoutReturnHandler implements Handler {
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) throws Exception {
     Tools.clearAllCookies(res, config);
-    res.sendRedirect(config.postLogoutLanding());
+    res.sendRedirect(config.postLogoutPage());
   }
 }

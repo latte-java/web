@@ -48,8 +48,9 @@ public class OIDCConfigTest {
 
     assertEquals(config.scopes(), List.of("openid", "profile", "email", "offline_access"));
     assertTrue(config.validateAccessToken());
-    assertEquals(config.postLoginLanding(), "/");
-    assertEquals(config.postLogoutLanding(), "/");
+    assertEquals(config.errorPage(), "/");
+    assertEquals(config.postLoginPage(), "/");
+    assertEquals(config.postLogoutPage(), "/");
     assertEquals(config.callbackPath(), "/oidc/return");
     assertEquals(config.logoutPath(), "/logout");
     assertEquals(config.logoutReturnPath(), "/oidc/logout-return");

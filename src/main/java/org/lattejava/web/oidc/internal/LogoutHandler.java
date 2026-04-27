@@ -22,7 +22,7 @@ public class LogoutHandler implements Handler {
     URI logoutEndpoint = config.logoutEndpoint();
     if (logoutEndpoint == null) {
       Tools.clearAllCookies(res, config);
-      res.sendRedirect(config.postLogoutLanding());
+      res.sendRedirect(config.postLogoutPage());
       return;
     }
 

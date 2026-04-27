@@ -114,8 +114,9 @@ public record OIDCConfig(
 
     boolean validateAccessToken,             // default: true — verify access-token JWT locally against JWKS. When false, validate by calling userinfo on every protected request.
 
-    String postLoginLanding,                 // default: "/"
-    String postLogoutLanding,                // default: "/"
+    String errorPage,                        // default: "/" — must NOT be a route protected by `authenticated()`; callback errors redirect here with `?oidc_error=...`
+    String postLoginPage,                    // default: "/"
+    String postLogoutPage,                   // default: "/"
     String loginPath,                        // default: "/login"           — Authenticated redirects here; LoginHandler runs the authorize redirect
     String callbackPath,                     // default: "/oidc/return"
     String logoutPath,                       // default: "/logout"
@@ -200,7 +201,7 @@ Hex chars are a subset of the PKCE-allowed set; 44 hex chars satisfy PKCE's ≥4
 
 ### Return-to cookie
 
-Set by the `Authenticated` middleware **before redirecting to `loginPath`**. Value: `req.getBaseURL() + req.getPath()`. The callback reads this cookie, clears it, and redirects there. Absent or blank → callback redirects to `config.postLoginLanding()`. Direct hits to `loginPath` (without going through `Authenticated` first) skip this step, so direct logins land on `postLoginLanding`.
+Set by the `Authenticated` middleware **before redirecting to `loginPath`**. Value: `req.getBaseURL() + req.getPath()`. The callback reads this cookie, clears it, and redirects there. Absent or blank → callback redirects to `config.postLoginPage()`. Direct hits to `loginPath` (without going through `Authenticated` first) skip this step, so direct logins land on `postLoginPage`.
 
 ## Flow walkthrough
 
@@ -228,18 +229,31 @@ The same sequence runs at the end of any failed validation/refresh path below.
 
 ### Callback handler (`OIDC.handle` on `config.callbackPath()`)
 
-1. If query `error` is present: `Tools.clearAllCookies(res, config)`, then redirect to `postLoginLanding` with `?oidc_error=<error_description or error>` URL-encoded. (Separator chosen based on whether `postLoginLanding` already contains `?`.)
-2. Read `oidc_state` cookie. If query `state` is null or doesn't equal the cookie → `400`.
-3. Read `code` query param. Null/blank → `400`.
+Every error path uses a shared helper that calls `Tools.clearAllCookies(res, config)` and redirects to `errorPage` with two URL-encoded query parameters: `oidc_error=<code>` (machine-readable, intended for localization) and `oidc_error_description=<text>` (human-readable English fallback). The separator is `&` if `errorPage` already contains `?`, otherwise `?`. The browser always lands on a real page — no blank-screen 4xx/5xx responses for callback failures. **`errorPage` must not be a route protected by `authenticated()`** — landing there with stale/cleared cookies would otherwise kick the browser straight back into the login flow and lose the error context.
+
+The error codes are stable identifiers; descriptions are the default English text (apps can localize off the code in their error page).
+
+| Branch                                    | `oidc_error` (code)         | `oidc_error_description`        |
+|-------------------------------------------|-----------------------------|----------------------------------|
+| IdP returned `?error=...`                 | echoes the IdP's `error`    | IdP's `error_description` (or echoes `error` if absent) |
+| State cookie missing or mismatch          | `invalid_state`             | `Invalid state`                  |
+| Code missing or blank                     | `missing_code`              | `Missing authorization code`     |
+| Token endpoint exception / non-2xx / missing tokens | `token_exchange_failed` | `Token exchange failed`          |
+| ID-token signature verification failed    | `invalid_id_token`          | `Invalid ID token`               |
+| Access-token decode failed (`validateAccessToken=true`) | `invalid_access_token` | `Invalid access token`           |
+
+1. If query `error` is present: redirect with the IdP's `error` code and its `error_description` (or the code echoed as the description when absent).
+2. Read `oidc_state` cookie. If query `state` is null or doesn't equal the cookie → redirect with `invalid_state`.
+3. Read `code` query param. Null/blank → redirect with `missing_code`.
 4. Compute `redirectURI = config.fullRedirectURI(req)`.
 5. POST to `tokenEndpoint` via `Tools.postToken` with form params `grant_type=authorization_code`, `code`, `redirect_uri`, `code_verifier=<state cookie value>`. Auth: HTTP Basic with `clientId:clientSecret`.
-6. Any thrown exception during the exchange → `500`. Non-2xx response → `400`.
-7. Parse the response JSON: `access_token`, `id_token`, `refresh_token` (optional), `expires_in` (default 3600 if absent). If `access_token` or `id_token` is null → `400`.
-8. Verify the `id_token` signature against JWKS via `new JWTDecoder().decode(idToken, jwks)`. Failure → `400`.
-9. When `validateAccessToken=true`, decode again against JWKS. (Note: the current code re-decodes the `id_token` rather than the access token in this branch — it sets the cookies regardless of which token was decoded a second time, and any failure → `400`.)
+6. Any thrown exception or non-2xx response → redirect with `token_exchange_failed`.
+7. Parse the response JSON: `access_token`, `id_token`, `refresh_token` (optional), `expires_in` (default 3600 if absent). If `access_token` or `id_token` is null → redirect with `token_exchange_failed`.
+8. Verify the `id_token` signature against JWKS via `new JWTDecoder().decode(idToken, jwks)`. Failure → redirect with `invalid_id_token`.
+9. When `validateAccessToken=true`, decode again against JWKS. (Note: the current code re-decodes the `id_token` rather than the access token in this branch — see Caveats.) Any failure → redirect with `invalid_access_token`.
 10. `Tools.addAuthCookies(req, res, config, idToken, accessToken, refreshToken, expiresIn)`.
 11. `Tools.clearCookie` for both `oidc_state` and `oidc_return_to`.
-12. Redirect: if the return-to cookie was set and non-blank, redirect there; otherwise to `postLoginLanding`.
+12. Redirect: if the return-to cookie was set and non-blank, redirect there; otherwise to `postLoginPage`.
 
 ### Protected request (`Authenticated` middleware)
 
@@ -273,7 +287,7 @@ The validator returns a sealed `Result` (`Valid` / `Invalid` / `NetworkError`); 
 
 1. If `logoutEndpoint` is null:
    - `Tools.clearAllCookies(res, config)`.
-   - `res.sendRedirect(config.postLogoutLanding())`.
+   - `res.sendRedirect(config.postLogoutPage())`.
 2. Otherwise:
    - Read the `id_token` cookie (may be null).
    - Compute `returnURI = req.getBaseURL() + config.logoutReturnPath()`.
@@ -283,7 +297,7 @@ The validator returns a sealed `Result` (`Valid` / `Invalid` / `NetworkError`); 
 ### Logout return (`OIDC.handle` on `config.logoutReturnPath()`)
 
 1. `Tools.clearAllCookies(res, config)` — clears `access_token`, `id_token`, `refresh_token`, `oidc_state`, `oidc_return_to`.
-2. `res.sendRedirect(config.postLogoutLanding())`.
+2. `res.sendRedirect(config.postLogoutPage())`.
 
 `logoutReturnPath` does not verify anything — it's safe to hit directly. A user arriving here without having been through the IdP flow still ends up logged out and at the landing page.
 
@@ -392,16 +406,17 @@ All login-redirect tests use FusionAuth's discovery document to populate endpoin
 - **[FA]** `redirect_uri` equals `req.getBaseURL() + callbackPath`.
 
 ### Callback
-- **[Local]** Missing `oidc_state` cookie → 400.
-- **[Local]** State cookie value ≠ query state → 400.
-- **[Local]** Missing/blank `code` query param → 400.
-- **[Local]** Error query param → clear all cookies, redirect to `postLoginLanding` with `oidc_error` query param.
+All callback error paths return `302` to `errorPage` with both `oidc_error=<code>` and `oidc_error_description=<text>` query parameters and clear all OIDC cookies. None return 4xx/5xx (would leave the browser on a blank page).
+- **[Local]** Missing `oidc_state` cookie → 302 to landing with `oidc_error=invalid_state` and description `Invalid state`.
+- **[Local]** State cookie value ≠ query state → 302 to landing with `oidc_error=invalid_state` and description `Invalid state`.
+- **[Local]** Missing/blank `code` query param → 302 to landing with `oidc_error=missing_code` and description `Missing authorization code`.
+- **[Local]** Error query param → 302 to landing with `oidc_error=<idp error code>` and `oidc_error_description=<idp error_description or code>`.
 - **[FA]** Successful code exchange → sets access/id/refresh cookies with correct attributes and Max-Age (`expires_in` for access/id, `refreshTokenMaxAge` for refresh).
-- **[FA]** Return-to cookie honored when present; falls back to `postLoginLanding` when absent or blank.
-- **[Mock]** Token-endpoint exception during exchange → 500.
-- **[Mock]** Token-endpoint non-2xx response → 400.
-- **[Mock]** Token-endpoint 2xx but missing `access_token` or `id_token` → 400.
-- **[Mock]** Invalid ID token signature → 400.
+- **[FA]** Return-to cookie honored when present; falls back to `postLoginPage` when absent or blank.
+- **[Mock]** Token-endpoint exception during exchange → 302 with `oidc_error=token_exchange_failed`.
+- **[Mock]** Token-endpoint non-2xx response → 302 with `oidc_error=token_exchange_failed`.
+- **[Mock]** Token-endpoint 2xx but missing `access_token` or `id_token` → 302 with `oidc_error=token_exchange_failed`.
+- **[Mock]** Invalid ID token signature → 302 with `oidc_error=invalid_id_token`.
 
 ### Protected middleware
 - **[FA]** Valid access token → binds `CURRENT_JWT`, calls next.
@@ -440,8 +455,8 @@ All refresh tests need controlled token-endpoint responses.
 ### Logout
 - **[FA]** With `logoutEndpoint` configured: GET `logoutPath` with `id_token` cookie → 302 to IdP end-session URL containing `post_logout_redirect_uri` (= `baseURL + logoutReturnPath`), `client_id`, `id_token_hint`. Cookies are NOT cleared on this leg.
 - **[FA]** With `logoutEndpoint` configured but no `id_token` cookie: 302 to IdP end-session URL without `id_token_hint`.
-- **[Local]** Without `logoutEndpoint`: GET `logoutPath` clears all cookies inline and redirects to `postLogoutLanding`.
-- **[Local]** GET `logoutReturnPath` clears `access_token`, `id_token`, `refresh_token`, `oidc_state`, `oidc_return_to` cookies (Max-Age=0) and redirects to `postLogoutLanding`.
+- **[Local]** Without `logoutEndpoint`: GET `logoutPath` clears all cookies inline and redirects to `postLogoutPage`.
+- **[Local]** GET `logoutReturnPath` clears `access_token`, `id_token`, `refresh_token`, `oidc_state`, `oidc_return_to` cookies (Max-Age=0) and redirects to `postLogoutPage`.
 - **[Local]** `logoutReturnPath` hit directly (never went through IdP) still succeeds: clears cookies, redirects to landing.
 
 ### System middleware scoping

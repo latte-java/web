@@ -30,8 +30,9 @@ public record OIDCConfig(
     List<String> scopes,
     Function<JWT, Set<String>> roleExtractor,
     boolean validateAccessToken,
-    String postLoginLanding,
-    String postLogoutLanding,
+    String errorPage,
+    String postLoginPage,
+    String postLogoutPage,
     String loginPath,
     String callbackPath,
     String logoutPath,
@@ -72,6 +73,7 @@ public record OIDCConfig(
     private String callbackPath = "/oidc/return";
     private String clientId;
     private String clientSecret;
+    private String errorPage = "/";
     private String idTokenCookieName = "id_token";
     private String issuer;
     private URI jwksEndpoint;
@@ -79,8 +81,8 @@ public record OIDCConfig(
     private URI logoutEndpoint;
     private String logoutPath = "/logout";
     private String logoutReturnPath = "/oidc/logout-return";
-    private String postLoginLanding = "/";
-    private String postLogoutLanding = "/";
+    private String postLoginPage = "/";
+    private String postLogoutPage = "/";
     private String refreshTokenCookieName = "refresh_token";
     private Duration refreshTokenMaxAge = Duration.ofDays(30);
     private String returnToCookieName = "oidc_return_to";
@@ -178,7 +180,7 @@ public record OIDCConfig(
 
       return new OIDCConfig(issuer, authorizeEndpoint, tokenEndpoint, userinfoEndpoint, jwksEndpoint,
           logoutEndpoint, clientId, clientSecret, scopes, roleExtractor,
-          validateAccessToken, postLoginLanding, postLogoutLanding, loginPath, callbackPath, logoutPath,
+          validateAccessToken, errorPage, postLoginPage, postLogoutPage, loginPath, callbackPath, logoutPath,
           logoutReturnPath, stateCookieName, accessTokenCookieName, refreshTokenCookieName,
           idTokenCookieName, returnToCookieName, refreshTokenMaxAge);
     }
@@ -195,6 +197,11 @@ public record OIDCConfig(
 
     public Builder clientSecret(String value) {
       this.clientSecret = value;
+      return this;
+    }
+
+    public Builder errorPage(String value) {
+      this.errorPage = value;
       return this;
     }
 
@@ -233,13 +240,13 @@ public record OIDCConfig(
       return this;
     }
 
-    public Builder postLoginLanding(String value) {
-      this.postLoginLanding = value;
+    public Builder postLoginPage(String value) {
+      this.postLoginPage = value;
       return this;
     }
 
-    public Builder postLogoutLanding(String value) {
-      this.postLogoutLanding = value;
+    public Builder postLogoutPage(String value) {
+      this.postLogoutPage = value;
       return this;
     }
 

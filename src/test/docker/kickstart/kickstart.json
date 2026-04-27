@@ -72,7 +72,11 @@
           "oauthConfiguration": {
             "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
             "clientSecret": "#{standardAppSecret}",
-            "logoutURL": "http://localhost:8080/oidc/logout-return"
+            "consentMode": "NeverPrompt",
+            "enabledGrants": ["authorization_code", "refresh_token"],
+            "generateRefreshTokens": true,
+            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [
             { "name": "user" },
@@ -100,7 +104,11 @@
           "oauthConfiguration": {
             "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
             "clientSecret": "#{rotatingRefreshAppSecret}",
-            "logoutURL": "http://localhost:8080/oidc/logout-return"
+            "consentMode": "NeverPrompt",
+            "enabledGrants": ["authorization_code", "refresh_token"],
+            "generateRefreshTokens": true,
+            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [
             { "name": "user" },
@@ -124,7 +132,11 @@
           "oauthConfiguration": {
             "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
             "clientSecret": "#{keycloakAppSecret}",
-            "logoutURL": "http://localhost:8080/oidc/logout-return"
+            "consentMode": "NeverPrompt",
+            "enabledGrants": ["authorization_code", "refresh_token"],
+            "generateRefreshTokens": true,
+            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [
             { "name": "user" },
@@ -151,7 +163,11 @@
           "oauthConfiguration": {
             "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
             "clientSecret": "#{fastAppSecret}",
-            "logoutURL": "http://localhost:8080/oidc/logout-return"
+            "consentMode": "NeverPrompt",
+            "enabledGrants": ["authorization_code", "refresh_token"],
+            "generateRefreshTokens": true,
+            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [
             { "name": "user" },

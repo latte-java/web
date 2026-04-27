@@ -26,28 +26,21 @@ public class CallbackHandler implements Handler {
   public void handle(HTTPRequest req, HTTPResponse res) throws Exception {
     String error = req.getURLParameter("error");
     if (error != null) {
-      Tools.clearAllCookies(res, config);
-
       String desc = req.getURLParameter("error_description");
-      desc = desc != null ? desc : error;
-
-      String target = config.postLoginLanding()
-          + (config.postLoginLanding().contains("?") ? "&" : "?")
-          + "oidc_error=" + URLEncoder.encode(desc, StandardCharsets.UTF_8);
-      res.sendRedirect(target);
+      redirectError(res, error, desc != null ? desc : error);
       return;
     }
 
     String queryState = req.getURLParameter("state");
     String cookieState = Tools.readCookie(req, config.stateCookieName());
     if (queryState == null || !queryState.equals(cookieState)) {
-      res.setStatus(400);
+      redirectError(res, "invalid_state", "Invalid state");
       return;
     }
 
     String code = req.getURLParameter("code");
     if (code == null || code.isBlank()) {
-      res.setStatus(400);
+      redirectError(res, "missing_code", "Missing authorization code");
       return;
     }
 
@@ -56,12 +49,12 @@ public class CallbackHandler implements Handler {
     try {
       tok = exchangeCode(code, redirectURI, cookieState);
     } catch (Exception e) {
-      res.setStatus(500);
+      redirectError(res, "token_exchange_failed", "Token exchange failed");
       return;
     }
 
     if (tok.failed()) {
-      res.setStatus(400);
+      redirectError(res, "token_exchange_failed", "Token exchange failed");
       return;
     }
 
@@ -72,7 +65,7 @@ public class CallbackHandler implements Handler {
     long expiresIn = body.has("expires_in") ? body.get("expires_in").asLong() : 3600L;
 
     if (accessToken == null || idToken == null) {
-      res.setStatus(400);
+      redirectError(res, "token_exchange_failed", "Token exchange failed");
       return;
     }
 
@@ -80,7 +73,7 @@ public class CallbackHandler implements Handler {
     try {
       new JWTDecoder().decode(idToken, jwks);
     } catch (Exception e) {
-      res.setStatus(400);
+      redirectError(res, "invalid_id_token", "Invalid ID token");
       return;
     }
 
@@ -89,7 +82,7 @@ public class CallbackHandler implements Handler {
       try {
         new JWTDecoder().decode(idToken, jwks);
       } catch (Exception e) {
-        res.setStatus(400);
+        redirectError(res, "invalid_access_token", "Invalid access token");
         return;
       }
     }
@@ -99,7 +92,7 @@ public class CallbackHandler implements Handler {
     Tools.clearCookie(res, config.stateCookieName());
     Tools.clearCookie(res, config.returnToCookieName());
 
-    res.sendRedirect(returnTo != null && !returnTo.isBlank() ? returnTo : config.postLoginLanding());
+    res.sendRedirect(returnTo != null && !returnTo.isBlank() ? returnTo : config.postLoginPage());
   }
 
   private Tools.TokenEndpointResponse exchangeCode(String code, URI redirectURI, String codeVerifier)
@@ -112,5 +105,14 @@ public class CallbackHandler implements Handler {
             "code_verifier", codeVerifier
         )
     );
+  }
+
+  private void redirectError(HTTPResponse res, String code, String description) {
+    Tools.clearAllCookies(res, config);
+    String target = config.errorPage()
+        + (config.errorPage().contains("?") ? "&" : "?")
+        + "oidc_error=" + URLEncoder.encode(code, StandardCharsets.UTF_8)
+        + "&oidc_error_description=" + URLEncoder.encode(description, StandardCharsets.UTF_8);
+    res.sendRedirect(target);
   }
 }
