@@ -2,23 +2,24 @@
 
 Design for OIDC authentication in Latte Web. Branch: `features/oidc`.
 
-All classes live in `org.lattejava.web.oidc` except `UnauthenticatedException`, which lives in `org.lattejava.web` because non-OIDC code may throw/catch it.
+`UnauthenticatedException` lives in `org.lattejava.web` because non-OIDC code may throw/catch it. Everything else lives in `org.lattejava.web.oidc` (public) or `org.lattejava.web.oidc.internal` (implementation).
 
-IdP-agnostic: no external OIDC/OAuth2 library. All code written in this project.
+IdP-agnostic: no external OIDC/OAuth2 library on the request path. Discovery and JWKS use the `org.lattejava.jwt` library (`OpenIDConnect.discover` and `JWKS.fromJWKS`).
 
 ## Scope
 
 One cohesive subsystem covering:
 
 - Configuration (`OIDCConfig`).
-- Runtime class that is both the API entry point AND the system middleware (`OpenIDConnect<U>`).
+- Runtime class that is both the API entry point AND the system middleware (`OIDC<U>`).
 - Three protection middlewares: `authenticated()`, `hasAnyRole()`, `hasAllRoles()`.
 - Login-redirect flow with PKCE (`S256`).
-- OIDC Discovery (`{issuer}/.well-known/openid-configuration`) with explicit-endpoint override.
-- JWKS fetch + caching for token (access and ID) signature verification.
+- OIDC Discovery (`{issuer}/.well-known/openid-configuration`) with explicit-endpoint override, performed at config-build time.
+- JWKS fetch for token (access and ID) signature verification.
+- Login handler (kicks off the authorize redirect on `loginPath`).
 - Callback handler (code exchange → set cookies → redirect to return-to).
 - Logout handler with optional IdP RP-initiated logout (redirect to IdP end-session endpoint → IdP redirects back to a dedicated return path → clear cookies → redirect to landing).
-- Refresh-token cookie (lifetime configurable).
+- Refresh-token cookie (lifetime configurable) and reactive refresh on expired access token.
 - Request-scoped access to the JWT via `ScopedValue`, optionally typed via translator.
 
 ## Package layout
@@ -27,112 +28,97 @@ One cohesive subsystem covering:
 org.lattejava.web
 └── UnauthenticatedException                 (extends RuntimeException)
 
-org.lattejava.web.oidc
-├── OpenIDConnect<U>                         (implements Middleware)
+org.lattejava.web.oidc                       (exported)
+├── OIDC<U>                                  (implements Middleware)
 ├── OIDCConfig                               (record with Builder)
-├── Authenticated                            (implements Middleware)
-├── HasAnyRole                               (implements Middleware)
-├── HasAllRoles                              (implements Middleware)
-└── (internal: DiscoveryClient, JWKSCache, ...)
+├── Authenticated                            (implements Middleware; package-private constructor)
+├── HasAnyRole                               (implements Middleware; package-private constructor)
+└── HasAllRoles                              (implements Middleware; package-private constructor)
+
+org.lattejava.web.oidc.internal              (not exported)
+├── CallbackHandler                          (Handler)
+├── LoginHandler                             (Handler)
+├── LogoutHandler                            (Handler)
+├── LogoutReturnHandler                      (Handler)
+├── TokenValidator                           (validates access tokens via JWT-or-userinfo)
+└── Tools                                    (cookie helpers, HTTP client, mapper, ScopedValue)
 ```
 
-The three protection middlewares are **top-level public classes**, not inner/internal types. `OpenIDConnect.authenticated()` / `.hasAnyRole(...)` / `.hasAllRoles(...)` are thin factory methods that construct them — useful for readability but not required. A developer can construct the middlewares directly:
+`Authenticated`, `HasAnyRole`, and `HasAllRoles` are public types so handlers can refer to them, but their constructors are package-private. Construction goes through the factory methods on `OIDC`:
 
 ```java
 web.prefix("/app", app -> {
-  app.install(new Authenticated(oidc));
-  app.prefix("/admin", admin -> admin.install(new HasAnyRole(oidc, "admin")));
+  app.install(oidc.authenticated());
+  app.prefix("/admin", admin -> admin.install(oidc.hasAnyRole("admin")));
 });
 ```
 
-All three take an `OpenIDConnect<?>` in their constructor and delegate JWT validation, JWKS access, redirect-URL computation, and ScopedValue binding to it via package-private methods shared inside `org.lattejava.web.oidc`.
+The `ScopedValue<JWT>` lives on `org.lattejava.web.oidc.internal.Tools` (`Tools.CURRENT_JWT`); `OIDC` exposes it via the static `jwt()` / `optionalJWT()` and the instance `user()` / `optionalUser()`.
 
-## `OpenIDConnect<U>`
+## `OIDC<U>`
 
 ```java
-public class OpenIDConnect<U> implements Middleware {
-  private static final ScopedValue<JWT> CURRENT_JWT = ScopedValue.newInstance();
-
+public class OIDC<U> implements Middleware {
+  private final CallbackHandler callbackHandler;
   private final OIDCConfig config;
+  private final JWKS jwks;
+  private final LoginHandler loginHandler;
+  private final LogoutHandler logoutHandler;
+  private final LogoutReturnHandler logoutReturnHandler;
   private final Function<JWT, U> translator;
-  // internal: discovered endpoints, JWKS cache, HTTP client
 
-  public static OpenIDConnect<JWT> create(OIDCConfig config) {
-    return new OpenIDConnect<>(config, Function.identity());
-  }
+  public static OIDC<JWT> create(OIDCConfig config) { ... }
+  public static <U> OIDC<U> create(OIDCConfig config, Function<JWT, U> translator) { ... }
 
-  public static <U> OpenIDConnect<U> create(OIDCConfig config, Function<JWT, U> translator) {
-    return new OpenIDConnect<>(config, translator);
-  }
-
-  /** System-endpoint middleware: handles callback, logout, and logout-return paths; passes through otherwise. */
+  /** System-endpoint middleware: handles login, callback, logout, and logout-return paths; passes through otherwise. */
   @Override
   public void handle(HTTPRequest req, HTTPResponse res, MiddlewareChain chain) throws Exception {
     String path = req.getPath();
-    if (path.equals(config.callbackPath())) { handleCallback(req, res); return; }
-    if (path.equals(config.logoutPath())) { handleLogout(req, res); return; }
-    if (path.equals(config.logoutReturnPath())) { handleLogoutReturn(req, res); return; }
+    if (path.equals(config.callbackPath()))     { callbackHandler.handle(req, res); return; }
+    if (path.equals(config.loginPath()))        { loginHandler.handle(req, res); return; }
+    if (path.equals(config.logoutPath()))       { logoutHandler.handle(req, res); return; }
+    if (path.equals(config.logoutReturnPath())) { logoutReturnHandler.handle(req, res); return; }
     chain.next(req, res);
   }
 
-  /** Convenience factory: {@code new Authenticated(this)}. */
-  public Authenticated authenticated() { return new Authenticated(this); }
+  public Authenticated authenticated() { return new Authenticated(config, jwks); }
+  public HasAnyRole    hasAnyRole(String... roles)  { return new HasAnyRole(config, roles); }
+  public HasAllRoles   hasAllRoles(String... roles) { return new HasAllRoles(config, roles); }
 
-  /** Convenience factory: {@code new HasAnyRole(this, roles)}. */
-  public HasAnyRole hasAnyRole(String... roles) { return new HasAnyRole(this, roles); }
+  public U user() { ... }                       // throws UnauthenticatedException if no JWT bound
+  public Optional<U> optionalUser() { ... }     // empty if no JWT bound
 
-  /** Convenience factory: {@code new HasAllRoles(this, roles)}. */
-  public HasAllRoles hasAllRoles(String... roles) { return new HasAllRoles(this, roles); }
-
-  /** Translated user for the current request. Throws UnauthenticatedException if not bound. */
-  public U user() {
-    if (!CURRENT_JWT.isBound()) throw new UnauthenticatedException();
-    return translator.apply(CURRENT_JWT.get());
-  }
-
-  /** Translated user, or empty if not bound. */
-  public Optional<U> optionalUser() {
-    return CURRENT_JWT.isBound() ? Optional.of(translator.apply(CURRENT_JWT.get())) : Optional.empty();
-  }
-
-  /** Raw JWT. Throws UnauthenticatedException if not bound. */
-  public static JWT jwt() {
-    if (!CURRENT_JWT.isBound()) throw new UnauthenticatedException();
-    return CURRENT_JWT.get();
-  }
-
-  /** Raw JWT, or empty if not bound. */
-  public static Optional<JWT> optionalJWT() {
-    return CURRENT_JWT.isBound() ? Optional.of(CURRENT_JWT.get()) : Optional.empty();
-  }
+  public static JWT jwt() { ... }               // throws UnauthenticatedException if no JWT bound
+  public static Optional<JWT> optionalJWT() { ... }
 }
 ```
+
+`OIDC.create(...)` constructs `JWKS.fromJWKS(config.jwksEndpoint().toString()).build()` — a single fetch of the JWKS document at startup. The four internal handlers are pre-built on the instance and dispatched by path in `handle`.
 
 ## `OIDCConfig`
 
 ```java
 public record OIDCConfig(
-    String issuer,                           // optional — triggers discovery
+    String issuer,                           // optional — triggers discovery at build time
     URI authorizeEndpoint,                   // optional if discovery resolves it
     URI tokenEndpoint,                       // ditto
     URI userinfoEndpoint,                    // ditto
     URI jwksEndpoint,                        // ditto
-    URI logoutEndpoint,                      // optional; IdP end-session endpoint (OIDC RP-Initiated Logout). If null, logout skips the IdP roundtrip.
+    URI logoutEndpoint,                      // optional; IdP end-session endpoint. If null, logout skips the IdP roundtrip.
 
     String clientId,                         // required
     String clientSecret,                     // required
 
-    URI redirectURI,                         // optional; computed as baseURL + callbackPath when null
-
     List<String> scopes,                     // default: ["openid", "profile", "email", "offline_access"]
-    Function<JWT, Iterable<String>> roleExtractor, // default: jwt -> jwt.get("roles")
+    Function<JWT, Set<String>> roleExtractor,// default: jwt -> new HashSet<>(jwt.getList("roles", String.class))
 
     boolean validateAccessToken,             // default: true — verify access-token JWT locally against JWKS. When false, validate by calling userinfo on every protected request.
 
     String postLoginLanding,                 // default: "/"
     String postLogoutLanding,                // default: "/"
+    String loginPath,                        // default: "/login"           — Authenticated redirects here; LoginHandler runs the authorize redirect
     String callbackPath,                     // default: "/oidc/return"
-    String logoutPath,                       // default: "/oidc/logout"
+    String logoutPath,                       // default: "/logout"
     String logoutReturnPath,                 // default: "/oidc/logout-return"
 
     String stateCookieName,                  // default: "oidc_state"
@@ -144,49 +130,67 @@ public record OIDCConfig(
     Duration refreshTokenMaxAge              // default: Duration.ofDays(30)
 ) {
   public static Builder builder() { return new Builder(); }
+
+  /** Computes the callback redirect URI as {@code req.getBaseURL() + callbackPath()}. */
+  public URI fullRedirectURI(HTTPRequest req) { ... }
+
   public static class Builder { ... }
 }
 ```
+
+There is no configurable `redirectURI` field. The redirect URI is always computed per-request as `req.getBaseURL() + config.callbackPath()` via `OIDCConfig.fullRedirectURI(req)`, so login and callback compute the same value as long as the request reaches the app on the same base URL.
 
 ### Required fields
 
 - `clientId`, `clientSecret`.
 - Either `issuer` OR all four of `authorizeEndpoint` / `tokenEndpoint` / `userinfoEndpoint` / `jwksEndpoint`. Mixing is allowed — explicit endpoints override discovery.
 
-### Validation at build
+### Validation at `Builder.build()`
 
-- At least one of `{issuer set}` or `{all four endpoints set}`. Otherwise `IllegalArgumentException`. `logoutEndpoint` is independent — always optional.
-- `clientId`, `clientSecret` non-blank.
-- `scopes` contains `"openid"`.
-- `roleExtractor` non-null (defaulted).
-- All cookie names non-blank and pairwise distinct.
-- `callbackPath`, `logoutPath`, `logoutReturnPath` start with `/` and are pairwise distinct.
-- `issuer`, `redirectURI`, `logoutEndpoint` (each if set) are HTTPS.
-- If `validateAccessToken` is `false`, `userinfoEndpoint` must be resolvable (either explicitly set or discovered). Otherwise `IllegalStateException` at `OpenIDConnect.create()`.
+Throws `IllegalArgumentException` for:
+
+- `clientId` / `clientSecret` null or blank.
+- Neither `issuer` set nor all four endpoints set.
+- `scopes` null or missing `"openid"`.
+- `roleExtractor` null.
+- Any of the five cookie names null/blank, or duplicates among them.
+- Any of `callbackPath`, `logoutPath`, `logoutReturnPath` not starting with `/`, or duplicates among the three.
+- `issuer`, `authorizeEndpoint`, `tokenEndpoint`, `userinfoEndpoint`, `jwksEndpoint`, `logoutEndpoint` using a non-HTTPS scheme — except `http://` is permitted when the host is `localhost`, `127.0.0.1`, or `::1` (loopback). This makes local development against `http://localhost:9011` and similar workable without weakening production defaults.
+
+`loginPath` is not validated for `/`-prefix or distinctness from the other paths.
+
+After running discovery (`fillIn()`), `Builder.build()` throws `IllegalStateException` for:
+
+- `authorizeEndpoint`, `tokenEndpoint`, or `jwksEndpoint` still unresolved.
+- `validateAccessToken=false` with no `userinfoEndpoint` resolvable.
+
+`fillIn()` itself throws `IllegalStateException` (wrapping the underlying cause) if the discovery request fails: `"Failed to fetch OIDC discovery document for issuer [...]"`.
 
 ## `UnauthenticatedException`
 
-`org.lattejava.web.UnauthenticatedException extends RuntimeException`. Thrown by `user()` / `jwt()` when no JWT is bound (i.e., route isn't protected or middleware hasn't run yet).
+`org.lattejava.web.UnauthenticatedException extends RuntimeException`. Thrown by `OIDC.user()` / `OIDC.jwt()` when no JWT is bound (i.e., route isn't protected or middleware hasn't run yet).
 
 ### `ExceptionHandler` default mapping
 
-`ExceptionHandler` gains a baked-in default: `UnauthenticatedException.class → 401`. Merges with user-supplied mapping (user-supplied wins if they override). Small behavior change; callout in the `ExceptionHandler` javadoc.
+`ExceptionHandler` has a baked-in default: `UnauthenticatedException.class → 401`. User-supplied entries merge on top (user wins on key collision). The merge happens in the `ExceptionHandler` constructor; lookup walks the exception class hierarchy from most-specific to most-general before giving up and rethrowing.
 
 ## Cookies
 
-All cookies: `Secure`, `SameSite=Strict`, `Path=/`.
+Common attributes on every cookie set by this subsystem: `Path=/`, `SameSite=Strict`. `Secure` is set when the request scheme is `https` or `X-Forwarded-Proto: https` is present, so that local HTTP development still produces working cookies.
 
-| Cookie           | HttpOnly             | Max-Age                                                       |
-|------------------|----------------------|---------------------------------------------------------------|
-| `oidc_state`     | ✅                    | session (until callback consumes it)                          |
-| `oidc_return_to` | ✅                    | session (until callback consumes it)                          |
-| `access_token`   | ✅                    | from token response `expires_in` (or ID-token `exp` fallback) |
-| `refresh_token`  | ✅                    | `config.refreshTokenMaxAge()`                                 |
-| `id_token`       | ❌ (SPA reads claims) | same as access_token                                          |
+| Cookie           | HttpOnly             | Max-Age                                                                          |
+|------------------|----------------------|----------------------------------------------------------------------------------|
+| `oidc_state`     | ✅                    | session (no Max-Age — set as a transient cookie until callback consumes it)      |
+| `oidc_return_to` | ✅                    | session (no Max-Age — set as a transient cookie until callback consumes it)     |
+| `access_token`   | ✅                    | from token response `expires_in` (default 3600 if absent)                       |
+| `refresh_token`  | ✅                    | `config.refreshTokenMaxAge()` (default 30 days)                                 |
+| `id_token`       | ❌ (SPA reads claims) | same as access_token                                                             |
+
+`Tools.addAuthCookies` is the single chokepoint for writing `id_token`, `access_token`, `refresh_token`. `Tools.addTransientCookie` writes the state and return-to cookies. `Tools.clearAllAuthCookies` clears the three auth cookies; `Tools.clearAllCookies` additionally clears state and return-to.
 
 ### State cookie + PKCE verifier (single value)
 
-A securely-random hex string ≥ 44 chars (22 bytes from `SecureRandom.nextBytes`, hex-encoded). This value serves three roles at once:
+A securely-random hex string of 44 chars (22 bytes from `SecureRandom.nextBytes`, hex-encoded). Single value, three roles:
 
 - CSRF defense: sent as the OIDC `state` parameter; callback verifies the query-param `state` equals the cookie.
 - PKCE verifier: S256-hashed to produce the `code_challenge` sent in the authorize request; re-sent as `code_verifier` in the token exchange.
@@ -196,125 +200,128 @@ Hex chars are a subset of the PKCE-allowed set; 44 hex chars satisfy PKCE's ≥4
 
 ### Return-to cookie
 
-Set alongside the state cookie when `authenticated()` triggers a login redirect. Value: the original request URL (or path). Callback reads it, clears it, redirects there. Absent → redirect to `config.postLoginLanding()`.
+Set by the `Authenticated` middleware **before redirecting to `loginPath`**. Value: `req.getBaseURL() + req.getPath()`. The callback reads this cookie, clears it, and redirects there. Absent or blank → callback redirects to `config.postLoginLanding()`. Direct hits to `loginPath` (without going through `Authenticated` first) skip this step, so direct logins land on `postLoginLanding`.
 
 ## Flow walkthrough
 
-### Login redirect (triggered by `authenticated()` middleware on unauthenticated request)
+### Authenticated middleware on an unauthenticated request
 
-1. Generate state hex string via `SecureRandom` (≥ 44 chars).
-2. Compute `code_challenge = base64url(sha256(state))`.
-3. Compute `redirectURI` — use `config.redirectURI()` if set, else `req.getBaseURL() + config.callbackPath()`.
-4. Set `oidc_state` cookie (state hex, HttpOnly, Secure, SameSite=Strict).
-5. Set `oidc_return_to` cookie (request URL, HttpOnly, Secure, SameSite=Strict).
-6. Build authorize URL: `authorizeEndpoint?response_type=code&client_id=...&redirect_uri=...&scope=...&state=...&code_challenge=...&code_challenge_method=S256`.
-7. `res.sendRedirect(authorizeURL)`.
+`Authenticated` does not build the authorize URL itself — it bounces the user to `config.loginPath()` and lets `OIDC.handle` route to `LoginHandler`.
 
-### Callback (`OpenIDConnect.handle` on `config.callbackPath()`)
+1. Read the `access_token` cookie. If absent:
+   1. `Tools.clearAllAuthCookies(res, config)` (defensive).
+   2. `Tools.addTransientCookie(req, res, config.returnToCookieName(), req.getBaseURL() + req.getPath())`.
+   3. `res.sendRedirect(config.loginPath())`.
 
-1. Parse query: `state`, `code`, `error`, `error_description`.
-2. If `error` present: clear state + return-to cookies, redirect to `postLoginLanding` with `?oidc_error=...`.
-3. Read `oidc_state` cookie. Missing or not equal to query `state` → 400 (no body). Potential CSRF.
-4. Compute `redirectURI` same way as login redirect (must match exactly).
-5. POST to `tokenEndpoint` with: `grant_type=authorization_code`, `code`, `redirect_uri`, `code_verifier=<state cookie value>`. Basic-auth the client credentials.
-6. Parse response: `access_token`, `id_token`, `refresh_token` (optional), `expires_in`.
-7. Verify the `id_token` signature against JWKS. Check `iss`, `aud`, `exp`, `nbf`. Reject if bad. When `validateAccessToken=true`, also parse and verify the `access_token` as a JWT against the same checks. ID-token verification is unconditional (OIDC spec mandate); access-token verification is skipped when `validateAccessToken=false` to support IdPs that issue opaque access tokens.
-8. Set cookies: `access_token` (HttpOnly, Max-Age=expires_in), `id_token` (non-HttpOnly, Max-Age=expires_in), `refresh_token` (HttpOnly, Max-Age=`refreshTokenMaxAge`, if present in response).
-9. Clear `oidc_state` and `oidc_return_to` cookies.
-10. Redirect to return-to value (or `postLoginLanding` if absent).
+The same sequence runs at the end of any failed validation/refresh path below.
 
-### Protected request (`authenticated()` middleware)
+### Login handler (`OIDC.handle` on `config.loginPath()`)
 
-1. Read `access_token` cookie.
-   - Absent → trigger login redirect (section above).
-2. Validate the access token. Two modes:
-   - **`validateAccessToken=true` (default, local JWT validation):**
-     a. Parse + verify access-token JWT signature against JWKS. Check `iss`, `aud`.
-        - Signature failure with unknown `kid` → refresh JWKS once and retry.
-        - Signature failure after JWKS refresh → clear auth cookies, trigger login redirect.
-     b. Check `exp`.
-        - Not expired → valid; continue.
-        - Expired → attempt refresh (step 3).
-   - **`validateAccessToken=false` (userinfo-based validation):**
-     a. GET `userinfoEndpoint` with `Authorization: Bearer <access_token>`.
-        - 200 → access token is valid; continue.
-        - 401 → expired/revoked; attempt refresh (step 3).
-        - Network error / 5xx → 503, no cookie changes.
-     b. The access token is NOT required to be a JWT here (IdPs that issue opaque tokens are supported). Identity claims come from the `id_token` cookie (see step 4).
-3. **Refresh flow** (triggered by invalid access token in either mode):
-   - Read `refresh_token` cookie. Absent → clear auth cookies, trigger login redirect.
-   - POST to `tokenEndpoint` with `grant_type=refresh_token`, `refresh_token=<cookie value>`, client credentials via Basic auth.
-   - On 4xx (refresh token expired/revoked) or network/5xx failure → clear auth cookies, trigger login redirect.
-   - On success: set new `access_token` cookie (Max-Age from response `expires_in`). If response includes a new `refresh_token`, set it (Max-Age from `refreshTokenMaxAge`). If response includes a new `id_token`, set it. Re-run step 2 on the refreshed access token.
-4. Resolve the JWT to bind:
-   - `validateAccessToken=true` → bind the access-token JWT (already parsed in step 2a).
-   - `validateAccessToken=false` → bind the response from userinfo marshalled into a JWT object. This won't have a signature, but it is still a valid JWT. See https://openid.net/specs/openid-connect-core-1_0.html#UserInfo for details.
-5. Bind `CURRENT_JWT` ScopedValue with the resolved JWT; call `chain.next`.
-6. For `hasAnyRole` / `hasAllRoles`: after step 5's binding, extract roles via `config.roleExtractor()`; verify membership; if missing → 403.
+1. Generate state hex string via `SecureRandom` (22 bytes → 44 hex chars).
+2. Compute `code_challenge = base64url(sha256(state))` (no padding).
+3. `Tools.addTransientCookie` for `oidc_state` → state value.
+4. Compute `redirectURI = config.fullRedirectURI(req)`.
+5. Build the authorize URL: `authorizeEndpoint?response_type=code&client_id=...&redirect_uri=...&scope=...&state=...&code_challenge=...&code_challenge_method=S256`. The `?`/`&` separator is chosen based on whether `authorizeEndpoint` already contains a query string.
+6. `res.sendRedirect(authorizeURL)`.
 
-**Refresh is reactive, not proactive.** We only refresh when the access token has already expired. Proactive refresh (e.g., last 60s window) is a possible future enhancement; it adds complexity to handle clock skew and concurrent-request coordination without a real user-facing benefit at this stage.
+`LoginHandler` does **not** set the `oidc_return_to` cookie. That's the responsibility of whichever middleware redirected to `loginPath` (typically `Authenticated`).
 
-**Concurrent-request race.** Two simultaneous protected requests on the same browser session, both with the just-expired access token, will both attempt refresh. Each sends the same `refresh_token`; the IdP typically issues consistent results. If refresh-token rotation is enabled at the IdP, one response may invalidate the other's newly-issued refresh token, producing a spurious login redirect on the losing request. Acceptable for v1; a request-scoped mutex can be added later if it becomes a real user issue.
+### Callback handler (`OIDC.handle` on `config.callbackPath()`)
 
-### Logout (`OpenIDConnect.handle` on `config.logoutPath()`)
+1. If query `error` is present: `Tools.clearAllCookies(res, config)`, then redirect to `postLoginLanding` with `?oidc_error=<error_description or error>` URL-encoded. (Separator chosen based on whether `postLoginLanding` already contains `?`.)
+2. Read `oidc_state` cookie. If query `state` is null or doesn't equal the cookie → `400`.
+3. Read `code` query param. Null/blank → `400`.
+4. Compute `redirectURI = config.fullRedirectURI(req)`.
+5. POST to `tokenEndpoint` via `Tools.postToken` with form params `grant_type=authorization_code`, `code`, `redirect_uri`, `code_verifier=<state cookie value>`. Auth: HTTP Basic with `clientId:clientSecret`.
+6. Any thrown exception during the exchange → `500`. Non-2xx response → `400`.
+7. Parse the response JSON: `access_token`, `id_token`, `refresh_token` (optional), `expires_in` (default 3600 if absent). If `access_token` or `id_token` is null → `400`.
+8. Verify the `id_token` signature against JWKS via `new JWTDecoder().decode(idToken, jwks)`. Failure → `400`.
+9. When `validateAccessToken=true`, decode again against JWKS. (Note: the current code re-decodes the `id_token` rather than the access token in this branch — it sets the cookies regardless of which token was decoded a second time, and any failure → `400`.)
+10. `Tools.addAuthCookies(req, res, config, idToken, accessToken, refreshToken, expiresIn)`.
+11. `Tools.clearCookie` for both `oidc_state` and `oidc_return_to`.
+12. Redirect: if the return-to cookie was set and non-blank, redirect there; otherwise to `postLoginLanding`.
 
-1. If `logoutEndpoint` is configured:
-   - Read the `id_token` cookie. If present, use as the `id_token_hint` query param (the IdP uses it to identify which session to end).
-   - Compute `post_logout_redirect_uri` as `req.getBaseURL() + config.logoutReturnPath()` — must be pre-registered with the IdP.
-   - Build the end-session URL: `logoutEndpoint?id_token_hint=...&post_logout_redirect_uri=...&client_id=...`.
-   - `res.sendRedirect(endSessionURL)`.
-   - Cookies are cleared on the return trip, not here — the IdP needs the `id_token` until it handles the end-session request.
-2. If `logoutEndpoint` is NOT configured:
-   - Skip the IdP roundtrip. Fall through to the logout-return behavior inline: clear cookies and redirect to `postLogoutLanding`.
+### Protected request (`Authenticated` middleware)
 
-### Logout return (`OpenIDConnect.handle` on `config.logoutReturnPath()`)
+1. Read `access_token` cookie. Absent → see "Authenticated middleware on an unauthenticated request" above.
+2. Run `tokenValidator.validate(accessToken, accessToken=true)`. Three outcomes:
+   - `Valid(jwt)` → bind and continue (step 4).
+   - `NetworkError` → `503`, no cookie changes.
+   - `Invalid` → attempt refresh (step 3).
+3. **Refresh flow** (triggered by an `Invalid` access-token result):
+   - Read `refresh_token` cookie. Absent → fall through to login redirect (clear auth cookies, set return-to, redirect to `loginPath`).
+   - POST `tokenEndpoint` with `grant_type=refresh_token`, `refresh_token=<cookie value>`. Basic auth.
+   - Any thrown exception, non-2xx response, or unparseable body → fall through to login redirect.
+   - Parse the response: `access_token` (required), `refresh_token` (optional), `id_token` (optional), `expires_in` (default 3600).
+   - Re-validate the new `access_token` against the validator. If still `Invalid` → fall through to login redirect.
+   - On success: `Tools.addAuthCookies(req, res, config, newIdToken, newAccessToken, newRefreshToken, expiresIn)`. (Note: when the response omits a refresh or id token, that argument is null and `addAuthCookies` skips it — the existing cookie is left untouched.) Bind the new JWT and continue.
+4. Bind `Tools.CURRENT_JWT` via `ScopedValue.where(...).call(...)`, then call `chain.next(req, res)`.
 
-Entry point when the IdP redirects back after its end-session flow completes.
+### Token validation (`TokenValidator`)
 
-1. Clear `access_token`, `id_token`, `refresh_token` cookies (Max-Age=0). Also clear any lingering `oidc_state`, `oidc_return_to` cookies defensively.
-2. Redirect to `config.postLogoutLanding()`.
+`validate(token, accessTokenFlag)` decides between local JWT validation and userinfo-based validation based on `accessTokenFlag` and `config.validateAccessToken()`:
 
-Note: `logoutReturnPath` does not verify anything — it's safe to hit directly (the worst case is "already-logged-out user gets redirected to the landing page"). Some IdPs may not redirect back reliably; users arriving here without having been through the IdP flow still get the expected outcome.
+- If `!accessTokenFlag || config.validateAccessToken()`: `new JWTDecoder().decode(token, jwks, this::validateJWT)`. `validateJWT` returns `true` iff `jwt.audience().contains(config.clientId())`. Any decode/verify exception → `Result.Invalid()`. (Signature, `iss`, `exp`, `nbf` checks come from `JWTDecoder` and the JWKS-backed verifier; the application layer adds the audience check.)
+- Otherwise (`accessTokenFlag=true` AND `validateAccessToken=false`): `GET userinfoEndpoint` with `Authorization: Bearer <token>` via the shared `Tools.HTTP` client.
+  - 200 → parse the body, wrap into a `JWT` via `Tools.userinfoToJWT` (claims copied verbatim from the JSON body, signature empty), run the audience check, return `Result.Valid(jwt)` if it passes else `Result.Invalid`.
+  - 401 → `Result.Invalid`.
+  - Any other status, exception, or unreadable body → `Result.NetworkError`.
 
-### Refresh flow
+The validator returns a sealed `Result` (`Valid` / `Invalid` / `NetworkError`); `Authenticated` switches on those.
 
-Part of v1. See the "Protected request" flow above — when the access token is expired, the middleware exchanges the `refresh_token` cookie for a new access token (and possibly new refresh/id tokens) against `tokenEndpoint`, sets the new cookies, and continues the request. Only when the refresh itself fails do we fall back to a login redirect. This is reactive (triggered by observed expiry), not proactive (pre-emptive).
+### Logout (`OIDC.handle` on `config.logoutPath()`)
+
+1. If `logoutEndpoint` is null:
+   - `Tools.clearAllCookies(res, config)`.
+   - `res.sendRedirect(config.postLogoutLanding())`.
+2. Otherwise:
+   - Read the `id_token` cookie (may be null).
+   - Compute `returnURI = req.getBaseURL() + config.logoutReturnPath()`.
+   - Build the end-session URL: `logoutEndpoint?post_logout_redirect_uri=...&client_id=...` (separator chosen based on whether `logoutEndpoint` already has a query string), and append `&id_token_hint=...` if the `id_token` cookie is set.
+   - `res.sendRedirect(...)`. **No cookies are cleared at this step** — the `id_token` is still needed by the IdP. Cookies are cleared on the return trip.
+
+### Logout return (`OIDC.handle` on `config.logoutReturnPath()`)
+
+1. `Tools.clearAllCookies(res, config)` — clears `access_token`, `id_token`, `refresh_token`, `oidc_state`, `oidc_return_to`.
+2. `res.sendRedirect(config.postLogoutLanding())`.
+
+`logoutReturnPath` does not verify anything — it's safe to hit directly. A user arriving here without having been through the IdP flow still ends up logged out and at the landing page.
 
 ## Discovery and JWKS
 
 ### Discovery
 
-Triggered at `OpenIDConnect.create(...)`:
+Triggered at `OIDCConfig.Builder.build()`, before validation completes:
 
-1. If `config.issuer()` is set, GET `{issuer}/.well-known/openid-configuration`.
-2. Parse response. Populate any unset endpoint from the discovery document.
-3. Explicit endpoints in the config override discovered ones.
-4. Fail construction with a clear exception if a required endpoint is still unresolved.
+1. If `issuer` is null, skip discovery; all four endpoints must already be explicit.
+2. Otherwise call `OpenIDConnect.discover(issuer)` (from `org.lattejava.jwt`). Failures wrap into `IllegalStateException("Failed to fetch OIDC discovery document for issuer [...]")` and abort the build.
+3. For each endpoint (`authorize`, `token`, `userinfo`, `jwks`, `logout`), fill the field if it's still null and the discovery document advertises it. Explicitly-set endpoints win.
 
-If `issuer` is null, skip discovery; all four endpoints must be explicit.
+After `fillIn()` runs, `build()` checks that `authorize`, `token`, and `jwks` are non-null and that `userinfo` is non-null when `validateAccessToken=false`.
 
 ### JWKS
 
-- Fetched at `OpenIDConnect.create(...)` from `jwksEndpoint`.
-- Parsed into `kid`-keyed map of public keys.
-- Refreshed every hour on a background daemon thread, OR on verification failure (handles rotation).
-- Token verification: look up key by `kid` in the token header; verify signature.
+- Constructed at `OIDC.create(...)` via `JWKS.fromJWKS(config.jwksEndpoint().toString()).build()`, using all defaults of the `JWKS` library. This means: a single fetch at construction (with the library's standard timeout / retry behavior), no scheduled background refresh, and no automatic refresh-on-miss.
+- Token verification happens through `JWTDecoder().decode(token, jwks, ...)`; the verifier picks the JWK by `kid` from the cached snapshot.
+- There is no JWKS-refresh-on-unknown-`kid` retry built into the OIDC layer. A token signed with a key not present in the cached JWKS will be rejected as `Result.Invalid` and trigger the refresh flow → login redirect path. Rotating signing keys requires either restarting the app or enabling JWKS scheduled-refresh on the underlying `JWKS` object (not currently exposed as a config option here).
 
 ## Role extraction
 
-- Default: `jwt -> jwt.get("roles")` returns an `Iterable<String>`.
-- The middleware calls the extractor once per request passing it the validated access token if **validateAccessToken=true** or the response from userinfo if **validateAccessToken=false**, converts to `Set<String>`.
-- Nested/namespaced claims: user supplies their own lambda — e.g. `jwt -> jwt.get("realm_access").get("roles")` for Keycloak, or `jwt -> jwt.get("https://myapp.com/roles")` for Auth0.
-- JWT library returns an array for a claim: user wraps with `List.of(array)` in the lambda.
-- Null return from the extractor is treated as empty set (user has no roles).
+- Default extractor: `jwt -> new HashSet<>(jwt.getList("roles", String.class))`.
+- The middleware (`HasAnyRole` / `HasAllRoles`) calls the extractor once per request, passing the bound JWT — that's either the locally-validated access-token JWT (`validateAccessToken=true`) or the userinfo-as-JWT (`validateAccessToken=false`).
+- Nested/namespaced claims: user supplies their own lambda — e.g. for Keycloak, something like `jwt -> new HashSet<>(jwt.getList("realm_access.roles", String.class))` (depending on what the JWT library exposes for nested access).
+- The extractor must return a `Set<String>` (changed from the originally-designed `Iterable<String>`); `HasAllRoles` calls `containsAll`, `HasAnyRole` does a stream `anyMatch`.
+- The default extractor uses `jwt.getList(...)`, which throws if the claim is absent or not a list. If your IdP omits `roles`, supply your own extractor that returns an empty set.
 
-## `hasAnyRole` / `hasAllRoles` semantics
+## `HasAnyRole` / `HasAllRoles` semantics
 
-- Both require authentication first (equivalent to composing `authenticated()`).
-- `hasAnyRole(r1, r2, ...)` → pass if the user has at least one of the named roles.
-- `hasAllRoles(r1, r2, ...)` → pass if the user has every named role.
-- Empty varargs on either: compile-time allowed, runtime behavior = "has any of nothing" (always fails) / "has all of nothing" (always passes). Validate at install time — reject empty varargs with `IllegalArgumentException` to avoid footgun.
-- Role check failure → 403 with no body. (Login redirect is for unauthenticated; role failure is authorization, not authentication.)
+Both are public types in `org.lattejava.web.oidc` with package-private constructors; construction goes through `oidc.hasAnyRole(...)` / `oidc.hasAllRoles(...)`.
+
+- They do **not** authenticate. Install `oidc.authenticated()` upstream of these. A request that reaches `HasAnyRole`/`HasAllRoles` without a bound `CURRENT_JWT` is treated as a configuration error and gets `401`.
+- Empty varargs is rejected at construction with `IllegalArgumentException("At least one role must be provided")`.
+- `hasAnyRole(r1, r2, ...)` → pass if the user's role set contains at least one named role; otherwise `401`.
+- `hasAllRoles(r1, r2, ...)` → pass if the user's role set contains every named role; otherwise `401`.
+- (Authorization failures are returned as `401`, not `403`. See "Caveats" below.)
 
 ## Usage
 
@@ -323,13 +330,13 @@ var config = OIDCConfig.builder()
     .issuer("https://id.lattejava.org")
     .clientId("repo-webapp")
     .clientSecret(System.getenv("OIDC_CLIENT_SECRET"))
-    .roleExtractor(jwt -> jwt.get("realm_access").get("roles"))  // Keycloak nested
+    .roleExtractor(jwt -> new HashSet<>(jwt.getList("realm_access.roles", String.class)))
     .refreshTokenMaxAge(Duration.ofDays(60))
     .build();
 
-var oidc = OpenIDConnect.create(config, jwt -> new AppUser(jwt.getSubject(), jwt.getClaim("email")));
+var oidc = OIDC.create(config, jwt -> new AppUser(jwt.subject(), jwt.getString("email")));
 
-web.install(oidc);  // system middleware: callback + logout
+web.install(oidc);  // system middleware: login + callback + logout + logout-return
 
 web.prefix("/app", app -> {
   app.install(oidc.authenticated());
@@ -348,118 +355,132 @@ Phased (tests paired with implementation). Grouped by feature area.
 Each test case is tagged with its required environment:
 
 - **[Local]** — no IdP interaction. Pure unit/middleware behavior.
-- **[FA]** — can run against real FusionAuth at `https://local.fusionauth.io`.
+- **[FA]** — runs against a FusionAuth instance booted from `src/test/docker/kickstart/kickstart.json`.
 - **[Mock]** — needs a mocked IdP with canned responses. Used for anything requiring a specific token/userinfo response, a specific error, or a forced failure mode.
 
-When using FusionAuth, the JDK HttpClient is used to call FusionAuth's OAuth endpoints, including `authorize`, `token`, `userinfo`, `jwks`, and `openid-configuration`. This means a complete login can be performed during a test.
+When using FusionAuth, the JDK `HttpClient` (shared `Tools.HTTP`) calls FusionAuth's OAuth endpoints (`authorize`, `token`, `userinfo`, `jwks`, `openid-configuration`) — full logins are exercised end-to-end.
 
-FusionAuth is pre-provisioned via a Kickstart file (outside this project's scope) that creates all required objects: test users, applications for various role/policy combinations, and a lambda for custom-claim tests. Fixture users are `user@example.com` (roles `user`, `moderator`) and `admin@example.com` (role `admin`). Applications include one with refresh-token rotation enabled, one with rotation disabled, and an app named `keycloak` whose lambda injects a nested `realm_access.roles` claim into issued tokens. The tests consume these fixtures; they do not create them.
+FusionAuth is pre-provisioned via the kickstart file, which creates: test users, applications for various role/policy combinations, a tenant with a tenant-scoped issuer URL, and a lambda for custom-claim tests. Fixture users are `user@example.com` (roles `user`, `moderator`) and `admin@example.com` (role `admin`). Applications include one with refresh-token rotation enabled, one with rotation disabled, one fast-expiry app for short-TTL tests, and an app named `keycloak` whose lambda injects a nested `realm_access.roles` claim. Tests consume these fixtures; they do not create them.
 
-A few tests still use the FusionAuth API at runtime (creating or deleting key-pairs, configuring an app's signing key) — those are noted in the relevant test cases.
+A few tests still drive the FusionAuth API at runtime (creating or deleting key-pairs, configuring an app's signing key) — those are noted in the relevant test cases.
 
 The tests should always prefer using FusionAuth versus a mock.
 
 ### Config + validation
 - **[Local]** Required fields rejected as null/blank.
-- **[FA]** Issuer-only config: discovery populates endpoints. Use `https://local.fusionauth.io/.well-known/openid-configuration`, it always has the same endpoints.
+- **[FA]** Issuer-only config: discovery populates endpoints. Use the kickstart standard tenant's issuer URL.
 - **[Local]** All-explicit config: no discovery, endpoints used as given.
 - **[Local]** Neither issuer nor all explicit endpoints → `IllegalArgumentException`.
 - **[Local]** Scopes must contain "openid".
 - **[Local]** Cookie names must be pairwise distinct.
+- **[Local]** Localhost `http://` issuer is permitted.
+- **[Local]** Non-localhost `http://` issuer / endpoint → `IllegalArgumentException`.
 
 ### Discovery + JWKS
-- **[FA]** Discovery parses a spec-compliant document. Use `https://local.fusionauth.io/.well-known/openid-configuration`, it always has the same endpoints.
+- **[FA]** Discovery parses a spec-compliant document.
 - **[FA]** Explicit endpoints override discovery.
-- **[Local]** Unreachable issuer → clear exception at `create`. Point at a closed localhost port.
-- **[FA]** JWKS refresh succeeds when `kid` not found locally — token verifies after retry. Sequence: boot OIDC first (caches JWKS without K1), then create K1 in FusionAuth and configure the test app to sign with it, then log in to get a K1-signed token. Submit the token → cache miss → JWKS refresh now includes K1 → retry succeeds.
-- **[FA]** JWKS refresh fails when `kid` is not in FusionAuth's JWKS at all — token verification still fails after retry, request rejected. Sequence: create K1, configure the app to sign with it, log in to get a K1-signed token, then delete K1 from FusionAuth. Boot OIDC (JWKS fetch returns no K1). Submit the K1-signed token → cache miss → refresh still has no K1 → fail.
+- **[Local]** Unreachable issuer → `IllegalStateException` at `Builder.build()`. Point at a closed localhost port.
+- **[FA]** Token signed with a key present in JWKS verifies. (JWKS refresh-on-miss and scheduled refresh are not configured in the OIDC layer; rotation-recovery tests are not part of v1.)
 
 ### Login redirect
 All login-redirect tests use FusionAuth's discovery document to populate endpoints; the tested behavior is local (URL construction + cookie setting). No actual redirect is followed.
-- **[FA]** Unauthenticated request to protected route → 302 to authorize URL.
-- **[FA]** Authorize URL contains `client_id`, `redirect_uri`, `scope`, `state`, `code_challenge`, `code_challenge_method=S256`.
-- **[FA]** `oidc_state` cookie set with a 44+ hex-char random value.
-- **[FA]** `code_challenge` equals `base64url(sha256(state_cookie_value))`.
-- **[FA]** `oidc_return_to` cookie set to the original URL.
-- **[FA]** `redirectURI` computed from `req.getBaseURL() + callbackPath` when config URL is null.
-- **[FA]** Explicit `config.redirectURI()` used as-is when set.
+- **[FA]** Unauthenticated request to a route protected by `authenticated()` → 302 to `loginPath`, with the `oidc_return_to` cookie set to `req.getBaseURL() + req.getPath()`.
+- **[FA]** GET `loginPath` directly → 302 to authorize URL.
+- **[FA]** Authorize URL contains `client_id`, `redirect_uri`, `scope`, `state`, `code_challenge`, `code_challenge_method=S256`, `response_type=code`.
+- **[FA]** `oidc_state` cookie set with a 44-hex-char random value, transient, HttpOnly, SameSite=Strict.
+- **[FA]** `code_challenge` equals `base64url(sha256(state_cookie_value))` (no padding).
+- **[FA]** `redirect_uri` equals `req.getBaseURL() + callbackPath`.
 
 ### Callback
 - **[Local]** Missing `oidc_state` cookie → 400.
 - **[Local]** State cookie value ≠ query state → 400.
-- **[Local]** Error query param → clear cookies, redirect to `postLoginLanding` with error marker.
-- **[FA]** Successful code exchange → sets access/id/refresh cookies with correct attributes and Max-Age.
-- **[FA]** Return-to cookie honored when present; falls back to `postLoginLanding` when absent.
-- **[Mock]** Invalid ID token signature → clear cookies, 400. Mock token endpoint returns an id_token signed with a key not present in mock JWKS. Reproducing this against real FusionAuth is nearly impossible without production test hooks, since FA always signs with the app's current signing key.
+- **[Local]** Missing/blank `code` query param → 400.
+- **[Local]** Error query param → clear all cookies, redirect to `postLoginLanding` with `oidc_error` query param.
+- **[FA]** Successful code exchange → sets access/id/refresh cookies with correct attributes and Max-Age (`expires_in` for access/id, `refreshTokenMaxAge` for refresh).
+- **[FA]** Return-to cookie honored when present; falls back to `postLoginLanding` when absent or blank.
+- **[Mock]** Token-endpoint exception during exchange → 500.
+- **[Mock]** Token-endpoint non-2xx response → 400.
+- **[Mock]** Token-endpoint 2xx but missing `access_token` or `id_token` → 400.
+- **[Mock]** Invalid ID token signature → 400.
 
 ### Protected middleware
 - **[FA]** Valid access token → binds `CURRENT_JWT`, calls next.
-- **[FA]** `user()` returns translated value inside a protected route.
-- **[Local]** `user()` outside a protected route → throws `UnauthenticatedException`.
-- **[Local]** `optionalUser()` returns `Optional.empty()` outside.
-- **[FA]** Missing access token → triggers login redirect. (Uses real discovery for the authorize URL; middleware behavior is local.)
+- **[FA]** `oidc.user()` returns the translated value inside a protected route.
+- **[Local]** `OIDC.jwt()` outside a protected route → throws `UnauthenticatedException`.
+- **[Local]** `OIDC.optionalJWT()` returns `Optional.empty()` outside.
+- **[FA]** Missing access token → clears auth cookies, sets `oidc_return_to`, redirects to `loginPath`.
+- **[FA]** Userinfo `NetworkError` from validator (`validateAccessToken=false` mode, 5xx or exception) → 503, no cookie changes.
+
+### Role-based protection
 - **[FA]** `hasAnyRole("admin")` with `admin@example.com` → passes.
-- **[FA]** `hasAnyRole("admin")` with `user@example.com` (roles `user`, `moderator`) → 403.
+- **[FA]** `hasAnyRole("admin")` with `user@example.com` (roles `user`, `moderator`) → 401.
 - **[FA]** `hasAllRoles("user", "moderator")` with `user@example.com` → passes.
-- **[FA]** `hasAllRoles("user", "moderator")` with `admin@example.com` (only `admin`) → 403.
-- **[FA]** Custom `roleExtractor` resolves nested claims correctly. Uses the Kickstart-provisioned `keycloak` app whose lambda injects a `realm_access.roles` claim into the token; test uses `roleExtractor: jwt -> jwt.get("realm_access").get("roles")` and verifies role checks pass.
+- **[FA]** `hasAllRoles("user", "moderator")` with `admin@example.com` (only `admin`) → 401.
+- **[FA]** Custom `roleExtractor` resolves nested claims correctly. Uses the kickstart-provisioned `keycloak` app (lambda injects `realm_access.roles`).
+- **[Local]** `HasAnyRole` / `HasAllRoles` reached with no bound JWT → 401 (configuration error).
+- **[Local]** Empty varargs → `IllegalArgumentException` at construction.
 
 ### Refresh flow
 All refresh tests need controlled token-endpoint responses.
-- **[FA]** Expired access token + valid refresh token → refresh succeeds, new `access_token` cookie set, request proceeds with refreshed JWT bound. This will require that an initial JWT is issued with a very short expiration. The expiration time is set on a separate Tenant in FusionAuth with an expiration duration of 1 second. It issues a JWT, sleeps, and then runs the test with an expired access token. The Tenant used for this test should be separate and can always have a 1 second duration. 
-- **[FA]** Refresh response includes new `refresh_token` → new cookie set with `refreshTokenMaxAge`. Uses the Kickstart-provisioned FusionAuth app with refresh-token rotation enabled.
-- **[FA]** Refresh response omits `refresh_token` → old cookie preserved. Uses the Kickstart-provisioned app with refresh-token rotation disabled.
+- **[FA]** Expired access token + valid refresh token → refresh succeeds, new `access_token` cookie set, request proceeds with refreshed JWT bound. Driven by the kickstart's fast-expiry tenant/app (1-second TTL): issue a JWT, sleep, re-issue the protected request.
+- **[FA]** Refresh response includes new `refresh_token` → new cookie set with `refreshTokenMaxAge`. Uses the kickstart-provisioned app with refresh-token rotation enabled.
+- **[FA]** Refresh response omits `refresh_token` → old cookie preserved (the omitted argument hits the null-skip in `Tools.addAuthCookies`). Uses the kickstart-provisioned app with rotation disabled.
 - **[FA]** Refresh response includes new `id_token` → new cookie set.
-- **[Local]** Expired access token + no `refresh_token` cookie → clear auth cookies, login redirect. (Detection happens before any IdP call.)
-- **[FA]** Refresh endpoint returns 400/401 → clear auth cookies, login redirect. This will require changing a character in the refresh token and trying to refresh.
-- **[Mock]** Refresh endpoint network/5xx error → clear auth cookies, login redirect.
-- **[Mock]** Refreshed access token fails signature verification → clear auth cookies, login redirect.
-- **[FA]** Signature failure with unknown `kid` → JWKS refresh, retry once before giving up.
+- **[Local]** Expired access token + no `refresh_token` cookie → clear auth cookies, set return-to, redirect to `loginPath`.
+- **[FA]** Refresh endpoint returns 4xx (e.g., tampered refresh token) → clear auth cookies, set return-to, redirect to `loginPath`.
+- **[Mock]** Refresh endpoint network/5xx error → clear auth cookies, set return-to, redirect to `loginPath`.
+- **[Mock]** Refreshed access token fails signature verification → clear auth cookies, set return-to, redirect to `loginPath`.
 
 ### Userinfo-based validation (`validateAccessToken=false`)
-- **[Local]** `validateAccessToken=false` + no `userinfoEndpoint` resolvable → `IllegalStateException` at `OpenIDConnect.create()`.
-- **[FA]** Access token + 200 from userinfo → valid; userinfo response wrapped as a JWT and bound to ScopedValue; request proceeds. (FusionAuth issues JWT access tokens; with `validateAccessToken=false` the middleware treats them as opaque regardless.)
-- **[FA]** Access token + 401 from userinfo → refresh flow triggered. Strategy: short-TTL access token + sleep until expired, submit; userinfo returns 401.
-- **[Mock]** Access token + 5xx/network error from userinfo → 503, no cookie changes.
+- **[Local]** `validateAccessToken=false` + no `userinfoEndpoint` resolvable → `IllegalStateException` at `Builder.build()`.
+- **[FA]** Access token + 200 from userinfo → valid; userinfo response wrapped as a JWT and bound to ScopedValue; request proceeds.
+- **[FA]** Access token + 401 from userinfo → `Result.Invalid` → refresh flow → login redirect path.
+- **[Mock]** Access token + 5xx/network error from userinfo → `Result.NetworkError` → 503, no cookie changes.
 
 ### Logout
-- **[FA]** With `logoutEndpoint` configured: request to `logoutPath` → 302 to IdP end-session URL with `id_token_hint`, `post_logout_redirect_uri` (= baseURL + `logoutReturnPath`), `client_id`. (FusionAuth discovery populates `end_session_endpoint`.)
+- **[FA]** With `logoutEndpoint` configured: GET `logoutPath` with `id_token` cookie → 302 to IdP end-session URL containing `post_logout_redirect_uri` (= `baseURL + logoutReturnPath`), `client_id`, `id_token_hint`. Cookies are NOT cleared on this leg.
 - **[FA]** With `logoutEndpoint` configured but no `id_token` cookie: 302 to IdP end-session URL without `id_token_hint`.
-- **[Local]** Without `logoutEndpoint`: request to `logoutPath` clears cookies inline and redirects to `postLogoutLanding` (no IdP roundtrip).
-- **[Local]** `logoutReturnPath` clears `access_token`, `id_token`, `refresh_token`, `oidc_state`, `oidc_return_to` cookies (Max-Age=0) and redirects to `postLogoutLanding`.
+- **[Local]** Without `logoutEndpoint`: GET `logoutPath` clears all cookies inline and redirects to `postLogoutLanding`.
+- **[Local]** GET `logoutReturnPath` clears `access_token`, `id_token`, `refresh_token`, `oidc_state`, `oidc_return_to` cookies (Max-Age=0) and redirects to `postLogoutLanding`.
 - **[Local]** `logoutReturnPath` hit directly (never went through IdP) still succeeds: clears cookies, redirects to landing.
 
 ### System middleware scoping
-- **[Local]** `web.install(oidc)` at root handles callback + logout regardless of other prefixes.
-- **[Local]** Installing at a prefix confines system handling to that prefix (not the intended usage; just verify behavior isn't surprising).
+- **[Local]** `web.install(oidc)` at root handles login + callback + logout + logout-return regardless of other prefixes.
+- **[Local]** Installing at a prefix confines system handling to that prefix (not the intended usage; verify behavior isn't surprising).
 
 ### ExceptionHandler integration
-- **[Local]** `UnauthenticatedException` thrown inside a handler → 401 response.
-- **[Local]** User-supplied `ExceptionHandler` mapping overrides the default.
+- **[Local]** `UnauthenticatedException` thrown inside a handler → 401 response (default mapping).
+- **[Local]** User-supplied `ExceptionHandler` mapping for `UnauthenticatedException` overrides the default.
 
 ## Caveats and deferred
 
+- **Role-check failures return 401, not 403.** Both the missing-JWT misconfiguration case and the failed-role case return `401`. The original design called for `403` on authorization failures, but the current code uses `401` uniformly.
+- **Callback `validateAccessToken=true` re-decodes the id_token, not the access token.** When `validateAccessToken=true`, the callback handler calls `JWTDecoder().decode(idToken, jwks)` a second time rather than decoding the access token. The cookies are still set; the only effect is that the second JWT decode never validates the access token at the callback. The runtime path (`Authenticated` + `TokenValidator`) does validate the access token on every protected request.
+- **No JWKS rotation handling in the OIDC layer.** JWKS is fetched once at `OIDC.create(...)` and never refreshed. Tokens signed with a key not in the cached JWKS will be rejected and trigger the refresh-then-login-redirect path. If the IdP rotates signing keys, restart the app. Enabling `JWKS.scheduledRefresh` / `refreshOnMiss` would address this; not currently exposed via `OIDCConfig`.
 - **No CSRF `state` on IdP logout.** The end-session redirect doesn't include a `state` parameter for the return trip. Acceptable because `logoutReturnPath` only clears cookies and redirects — a forged return doesn't leak or grant anything.
-- **No proactive refresh.** Refresh only runs when the access token has already expired, not in a pre-emptive window.
+- **No proactive refresh.** Refresh only runs when the access token has already failed validation, not in a pre-emptive window.
 - **No userinfo caching in `validateAccessToken=false` mode.** Every protected request makes a userinfo HTTP call. Latency and IdP load scale linearly with traffic; deploy with care when enabling this mode. Caching (e.g., 30-second TTL keyed by access-token hash) is a post-MVP enhancement.
-- **Single `OpenIDConnect` instance per app.** `CURRENT_JWT` ScopedValue is static. Multi-tenant use-cases deferred.
+- **Single `OIDC` instance per app.** `Tools.CURRENT_JWT` ScopedValue is static. Multi-tenant use-cases deferred.
 - **No per-cookie HttpOnly override** in config. Hardcoded per cookie (see table). Can add later.
-- **No opt-out on HTTPS-enforcement** (validation refuses non-HTTPS issuer/redirectURI). Dev-mode override can be added when needed.
+- **Localhost HTTP exception baked in.** `Tools.requireSecureURI` permits `http://` only for `localhost`/`127.0.0.1`/`::1`. Non-loopback HTTP is rejected. There's no opt-out for production environments that intentionally proxy HTTP internally.
 - **No concurrent-refresh coordination.** Two simultaneous expired-token requests both attempt refresh; if the IdP rotates refresh tokens, one may fail. Acceptable for v1.
+- **No configurable `redirectURI`.** Always computed as `req.getBaseURL() + callbackPath`. Apps behind a reverse proxy must set `X-Forwarded-*` correctly so `req.getBaseURL()` returns the externally-visible URL.
 
 ## Implementation ordering
 
-The design is one cohesive system but the implementation splits into phases. Rough order:
+The design is one cohesive system but the implementation split into phases. The order that was actually followed:
 
 1. `OIDCConfig` record + Builder + validation. Tests.
 2. `UnauthenticatedException` + `ExceptionHandler` default mapping.
-3. `DiscoveryClient` + JWKS fetch + caching (internal). Discovery populates `logoutEndpoint` when the IdP advertises `end_session_endpoint`.
-4. `OpenIDConnect<U>` skeleton: factories, ScopedValue, `user()`/`jwt()` methods. Tests.
-5. Login-redirect logic inside `Authenticated` middleware.
-6. Callback handling in `OpenIDConnect.handle`.
-7. Access-token verification + ScopedValue binding in `Authenticated`. Covers both `validateAccessToken=true` (local JWT against JWKS) and `validateAccessToken=false` (call userinfo, marshal the JSON response into a JWT object with claims populated from the body and empty signature). The bound JWT is whichever form step 4 of the protected-request flow resolved.
-8. Refresh flow on expired/invalid access token (shared between both validation modes).
-9. `HasAnyRole` / `HasAllRoles`.
-10. Logout handling: `logoutPath` (with and without `logoutEndpoint`) and `logoutReturnPath`.
+3. Discovery wired into `OIDCConfig.Builder.build()` via the `org.lattejava.jwt` library (`OpenIDConnect.discover`). Discovery populates `logoutEndpoint` from `end_session_endpoint` when advertised.
+4. JWKS construction via `JWKS.fromJWKS(url).build()` at `OIDC.create(...)`.
+5. `OIDC<U>` skeleton: factories, ScopedValue (on `Tools`), `user()`/`jwt()` methods.
+6. `LoginHandler` (authorize redirect, PKCE) + system-middleware dispatch on `loginPath`.
+7. `Authenticated` middleware: missing-token redirect to `loginPath` (with return-to cookie).
+8. `CallbackHandler` (code exchange, id-token verify, cookies, return-to redirect).
+9. `TokenValidator` covering both validation modes; `Authenticated` wires it in for protected requests.
+10. Refresh flow inside `Authenticated` (shared between both validation modes).
+11. `HasAnyRole` / `HasAllRoles`.
+12. `LogoutHandler` and `LogoutReturnHandler`.
 
-Each phase ships with its tests. End-to-end test (real HTTP round-trip to a mock IdP or recorded fixture) added at phase 7+.
+Each phase shipped with its tests; test coverage is currently focused on `OIDCConfigTest`, with broader integration tests pending against the kickstart fixture.

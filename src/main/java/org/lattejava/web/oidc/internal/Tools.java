@@ -212,7 +212,7 @@ public class Tools {
 
   private static void addCommonCookieSettings(Cookie c, HTTPRequest req) {
     c.setPath("/");
-    c.setSecure(req.getScheme().equalsIgnoreCase("https") || req.getHeader("X-Forwarded-Proto").equalsIgnoreCase("https"));
+    c.setSecure(req.getScheme().equalsIgnoreCase("https") || "https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto")));
     c.setSameSite(Cookie.SameSite.Strict);
   }
 

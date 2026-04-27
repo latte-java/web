@@ -10,7 +10,11 @@
     "standardUserId": "10000000-0000-0000-0000-000000000010",
     "standardAdminId": "10000000-0000-0000-0000-000000000011",
     "fastAppId": "20000000-0000-0000-0000-000000000002",
-    "defaultPassword": "password"
+    "defaultPassword": "password",
+    "standardAppSecret": "standard-app-secret-1234567890abcdef",
+    "rotatingRefreshAppSecret": "rotating-refresh-app-secret-12345678",
+    "keycloakAppSecret": "keycloak-app-secret-1234567890abcdef0",
+    "fastAppSecret": "fast-app-secret-1234567890abcdef01234"
   },
   "apiKeys": [
     {
@@ -65,6 +69,11 @@
       "body": {
         "application": {
           "name": "app",
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "clientSecret": "#{standardAppSecret}",
+            "logoutURL": "http://localhost:8080/oidc/logout-return"
+          },
           "roles": [
             { "name": "user" },
             { "name": "admin" },
@@ -88,6 +97,11 @@
             "timeToLiveInSeconds": 3600,
             "refreshTokenUsagePolicy": "OneTimeUse"
           },
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "clientSecret": "#{rotatingRefreshAppSecret}",
+            "logoutURL": "http://localhost:8080/oidc/logout-return"
+          },
           "roles": [
             { "name": "user" },
             { "name": "admin" },
@@ -106,6 +120,11 @@
           "lambdaConfiguration": {
             "accessTokenPopulateId": "#{keycloakJWTPopulateLambdaId}",
             "idTokenPopulateId": "#{keycloakJWTPopulateLambdaId}"
+          },
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "clientSecret": "#{keycloakAppSecret}",
+            "logoutURL": "http://localhost:8080/oidc/logout-return"
           },
           "roles": [
             { "name": "user" },
@@ -128,6 +147,11 @@
             "idTokenKeyId": "#{asymmetricKeyId}",
             "refreshTokenTimeToLiveInMinutes": 1,
             "timeToLiveInSeconds": 1
+          },
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "clientSecret": "#{fastAppSecret}",
+            "logoutURL": "http://localhost:8080/oidc/logout-return"
           },
           "roles": [
             { "name": "user" },
