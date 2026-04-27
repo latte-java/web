@@ -7,8 +7,7 @@ package org.lattejava.web.middleware;
 
 import module java.base;
 import module org.lattejava.http;
-
-import org.lattejava.web.*;
+import module org.lattejava.web;
 
 /**
  * A middleware that rejects unsafe-method requests whose {@code Origin} header does not match the server's own origin

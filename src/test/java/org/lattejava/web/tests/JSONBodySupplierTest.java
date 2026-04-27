@@ -8,10 +8,8 @@ package org.lattejava.web.tests;
 import module com.fasterxml.jackson.databind;
 import module java.base;
 import module java.net.http;
-import module org.lattejava.http;
 import module org.lattejava.web;
-
-import org.testng.annotations.*;
+import module org.testng;
 
 import static org.testng.Assert.*;
 
@@ -41,9 +39,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
   @Test
   public void jsonBodySupplier_emptyBody_returns400() throws Exception {
     try (var web = new Web()) {
-      web.post("/users", (_, res, _) -> {
-        res.setStatus(200);
-      }, JSONBodySupplier.of(User.class));
+      web.post("/users", (_, res, _) -> res.setStatus(200), JSONBodySupplier.of(User.class));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("");
@@ -56,9 +52,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
     // Jackson by default FAILS on unknown properties. Verify our documented behavior:
     // with a default ObjectMapper, unknown fields cause a parse error (400).
     try (var web = new Web()) {
-      web.post("/users", (req, res, user) -> {
-        res.setStatus(200);
-      }, JSONBodySupplier.of(User.class));
+      web.post("/users", (_, res, _) -> res.setStatus(200), JSONBodySupplier.of(User.class));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("""
@@ -109,9 +103,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
   public void jsonBodySupplier_typeMismatch_returns400() throws Exception {
     // JSON is valid but doesn't match User's shape (array instead of object)
     try (var web = new Web()) {
-      web.post("/users", (_, res, _) -> {
-        res.setStatus(200);
-      }, JSONBodySupplier.of(User.class));
+      web.post("/users", (_, res, _) -> res.setStatus(200), JSONBodySupplier.of(User.class));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("[1, 2, 3]");

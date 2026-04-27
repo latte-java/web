@@ -5,10 +5,10 @@
  */
 package org.lattejava.web.tests;
 
-import org.lattejava.web.Web;
-import org.testng.annotations.Test;
+import module org.lattejava.web;
+import module org.testng;
 
-import static org.testng.Assert.fail;
+import static org.testng.Assert.*;
 
 @SuppressWarnings("resource")
 public class ValidationTest {
@@ -18,74 +18,8 @@ public class ValidationTest {
   // -------------------------------------------------------------------------
 
   @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_emptyPath_throws() {
-    new Web().get("", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_noLeadingSlash_throws() {
-    new Web().get("users", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_pathWithSpace_throws() {
-    new Web().get("/hello world", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_pathWithControlChar_throws() {
-    new Web().get("/hello\tworld", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_unclosedParam_throws() {
-    new Web().get("/users/{id", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_unopenedParam_throws() {
-    new Web().get("/users/id}", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_mixedLiteralAndParam_throws() {
-    new Web().get("/users/foo{id}", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_emptyParamName_throws() {
-    new Web().get("/users/{}", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_paramNameWithSpace_throws() {
-    new Web().get("/users/{ id }", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_paramNameWithHyphen_throws() {
-    new Web().get("/users/{my-id}", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_paramNameStartsWithDigit_throws() {
-    new Web().get("/users/{1abc}", (_, _) -> {
-    });
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_duplicateParamNames_throws() {
-    new Web().get("/users/{id}/posts/{id}", (_, _) -> {
+  public void route_blankMethodEntry_throws() {
+    new Web().route(java.util.List.of("  "), "/test", (_, _) -> {
     });
   }
 
@@ -101,6 +35,12 @@ public class ValidationTest {
     }
   }
 
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_duplicateParamNames_throws() {
+    new Web().get("/users/{id}/posts/{id}", (_, _) -> {
+    });
+  }
+
   @Test(expectedExceptions = IllegalStateException.class)
   public void route_duplicateRegistration_throws() {
     var web = new Web();
@@ -109,19 +49,50 @@ public class ValidationTest {
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_percentInPathSpec_throws() {
-    // The PathParser rejects '%' in pathSpec (our allowed char set is RFC 3986 pchar minus '%').
-    new Web().get("/emoji/%F0%9F%98%80", (_, _) -> {
+  public void route_emptyMethods_throws() {
+    new Web().route(java.util.List.of(), "/test", (_, res) -> res.setStatus(200));
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_emptyParamName_throws() {
+    new Web().get("/users/{}", (_, _) -> {
     });
   }
 
-  // -------------------------------------------------------------------------
-  // Method validation
-  // -------------------------------------------------------------------------
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_emptyPath_throws() {
+    new Web().get("", (_, _) -> {
+    });
+  }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_emptyMethods_throws() {
-    new Web().route(java.util.List.of(), "/test", (_, res) -> res.setStatus(200));
+  public void route_methodWithDigits_throws() {
+    new Web().route(java.util.List.of("GET1"), "/test", (_, _) -> {
+    });
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_methodWithInvalidChar_throws() {
+    new Web().route(java.util.List.of("GET!"), "/test", (_, _) -> {
+    });
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_methodWithWhitespace_throws() {
+    new Web().route(java.util.List.of("GE T"), "/test", (_, _) -> {
+    });
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_mixedLiteralAndParam_throws() {
+    new Web().get("/users/foo{id}", (_, _) -> {
+    });
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_noLeadingSlash_throws() {
+    new Web().get("users", (_, _) -> {
+    });
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
@@ -133,26 +104,55 @@ public class ValidationTest {
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_blankMethodEntry_throws() {
-    new Web().route(java.util.List.of("  "), "/test", (_, _) -> {
+  public void route_paramNameStartsWithDigit_throws() {
+    new Web().get("/users/{1abc}", (_, _) -> {
     });
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_methodWithWhitespace_throws() {
-    new Web().route(java.util.List.of("GE T"), "/test", (_, _) -> {
+  public void route_paramNameWithHyphen_throws() {
+    new Web().get("/users/{my-id}", (_, _) -> {
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Method validation
+  // -------------------------------------------------------------------------
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_paramNameWithSpace_throws() {
+    new Web().get("/users/{ id }", (_, _) -> {
     });
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_methodWithInvalidChar_throws() {
-    new Web().route(java.util.List.of("GET!"), "/test", (_, _) -> {
+  public void route_pathWithControlChar_throws() {
+    new Web().get("/hello\tworld", (_, _) -> {
     });
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
-  public void route_methodWithDigits_throws() {
-    new Web().route(java.util.List.of("GET1"), "/test", (_, _) -> {
+  public void route_pathWithSpace_throws() {
+    new Web().get("/hello world", (_, _) -> {
+    });
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_percentInPathSpec_throws() {
+    // The PathParser rejects '%' in pathSpec (our allowed char set is RFC 3986 pchar minus '%').
+    new Web().get("/emoji/%F0%9F%98%80", (_, _) -> {
+    });
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_unclosedParam_throws() {
+    new Web().get("/users/{id", (_, _) -> {
+    });
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void route_unopenedParam_throws() {
+    new Web().get("/users/id}", (_, _) -> {
     });
   }
 }

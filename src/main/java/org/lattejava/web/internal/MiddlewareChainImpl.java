@@ -5,13 +5,9 @@
  */
 package org.lattejava.web.internal;
 
-import java.util.List;
-
-import org.lattejava.http.server.HTTPRequest;
-import org.lattejava.http.server.HTTPResponse;
-import org.lattejava.web.Handler;
-import org.lattejava.web.Middleware;
-import org.lattejava.web.MiddlewareChain;
+import module java.base;
+import module org.lattejava.http;
+import module org.lattejava.web;
 
 /**
  * Executes a list of middlewares followed by the terminal handler.

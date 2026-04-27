@@ -15,6 +15,51 @@ import module java.base;
  */
 public class PathParser {
   /**
+   * Splits a literal path (request URL path or a route-registration prefix) into its segments using a single
+   * {@code indexOf('/')} pass. Does not validate characters or interpret {@code {name}} parameter syntax — use
+   * {@link #parseWithParameters(String)} for that.
+   * <p>
+   * Semantics match the prior {@code path.split("/", -1)} with the leading empty dropped:
+   * <ul>
+   *   <li>{@code ""} returns an empty list.</li>
+   *   <li>{@code "/"} returns a list containing a single empty string.</li>
+   *   <li>{@code "/a"} returns {@code ["a"]}.</li>
+   *   <li>{@code "/a/"} returns {@code ["a", ""]}.</li>
+   *   <li>{@code "/a/b"} returns {@code ["a", "b"]}.</li>
+   * </ul>
+   *
+   * @param path the path to split.
+   * @return a mutable {@code ArrayList<String>} of segments; callers wrap for immutability if needed.
+   */
+  public static List<String> parsePath(String path) {
+    Objects.requireNonNull(path, "path must not be null");
+
+    ArrayList<String> segments = new ArrayList<>(11);
+    int len = path.length();
+    if (len == 0) {
+      return segments;
+    }
+
+    int start = (path.charAt(0) == '/') ? 1 : 0;
+    if (start >= len) {
+      segments.add("");
+      return segments;
+    }
+
+    while (start <= len) {
+      int slash = path.indexOf('/', start);
+      if (slash < 0) {
+        segments.add(path.substring(start));
+        break;
+      }
+      segments.add(path.substring(start, slash));
+      start = slash + 1;
+    }
+
+    return segments;
+  }
+
+  /**
    * Validates and parses the given path specification into a list of segments. Segments might be literals or
    * parameters, depending on the String. Parameters are denoted by curly braces.
    *
@@ -130,51 +175,6 @@ public class PathParser {
       case PARAM_END -> {
         // Valid end state — param was already added
       }
-    }
-
-    return segments;
-  }
-
-  /**
-   * Splits a literal path (request URL path or a route-registration prefix) into its segments using a single
-   * {@code indexOf('/')} pass. Does not validate characters or interpret {@code {name}} parameter syntax — use
-   * {@link #parseWithParameters(String)} for that.
-   * <p>
-   * Semantics match the prior {@code path.split("/", -1)} with the leading empty dropped:
-   * <ul>
-   *   <li>{@code ""} returns an empty list.</li>
-   *   <li>{@code "/"} returns a list containing a single empty string.</li>
-   *   <li>{@code "/a"} returns {@code ["a"]}.</li>
-   *   <li>{@code "/a/"} returns {@code ["a", ""]}.</li>
-   *   <li>{@code "/a/b"} returns {@code ["a", "b"]}.</li>
-   * </ul>
-   *
-   * @param path the path to split.
-   * @return a mutable {@code ArrayList<String>} of segments; callers wrap for immutability if needed.
-   */
-  public static List<String> parsePath(String path) {
-    Objects.requireNonNull(path, "path must not be null");
-
-    ArrayList<String> segments = new ArrayList<>(11);
-    int len = path.length();
-    if (len == 0) {
-      return segments;
-    }
-
-    int start = (path.charAt(0) == '/') ? 1 : 0;
-    if (start >= len) {
-      segments.add("");
-      return segments;
-    }
-
-    while (start <= len) {
-      int slash = path.indexOf('/', start);
-      if (slash < 0) {
-        segments.add(path.substring(start));
-        break;
-      }
-      segments.add(path.substring(start, slash));
-      start = slash + 1;
     }
 
     return segments;

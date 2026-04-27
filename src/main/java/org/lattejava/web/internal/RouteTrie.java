@@ -5,16 +5,14 @@
  */
 package org.lattejava.web.internal;
 
-import java.util.*;
-
-import org.lattejava.web.Handler;
-import org.lattejava.web.Middleware;
+import module java.base;
+import module org.lattejava.web;
 
 /**
  * A segment-level trie for O(path_length) route matching.
  * <p>
- * Literal children are always tried before the param child (structural priority — no scoring
- * needed). The matcher backtracks from a static dead-end to the param child.
+ * Literal children are always tried before the param child (structural priority — no scoring needed). The matcher
+ * backtracks from a static dead-end to the param child.
  *
  * @author Brian Pontarelli
  */
@@ -75,8 +73,8 @@ public class RouteTrie {
    *
    * @param path   The request path (e.g., {@code /api/users/42})
    * @param method The HTTP method (e.g., {@code GET})
-   * @return The match outcome. All outcome variants carry the parsed path segments so the
-   *     caller can reuse them (e.g., for prefix-scoped middleware resolution) without re-parsing.
+   * @return The match outcome. All outcome variants carry the parsed path segments so the caller can reuse them (e.g.,
+   *     for prefix-scoped middleware resolution) without re-parsing.
    */
   public Outcome match(String path, String method) {
     List<String> segments = PathParser.parsePath(path);
@@ -153,13 +151,8 @@ public class RouteTrie {
   }
 
   /**
-   * Pairs a handler with its per-route middlewares.
-   */
-  public record RouteEntry(Handler handler, List<Middleware> middlewares) {}
-
-  /**
-   * The result of a route match. All variants carry the parsed path segments so callers can reuse
-   * them for downstream work (e.g., prefix-scoped middleware resolution) without re-parsing.
+   * The result of a route match. All variants carry the parsed path segments so callers can reuse them for downstream
+   * work (e.g., prefix-scoped middleware resolution) without re-parsing.
    */
   public sealed interface Outcome permits Outcome.Found, Outcome.MethodNotAllowed, Outcome.NotFound {
     record Found(Handler handler, List<Middleware> middlewares, Map<String, String> pathParams,
@@ -185,5 +178,11 @@ public class RouteTrie {
 
     // literal segment text -> child; lazy-init
     Map<String, Node> staticChildren;
+  }
+
+  /**
+   * Pairs a handler with its per-route middlewares.
+   */
+  public record RouteEntry(Handler handler, List<Middleware> middlewares) {
   }
 }

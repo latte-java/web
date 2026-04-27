@@ -7,9 +7,9 @@ package org.lattejava.web;
 
 import module java.base;
 import module org.lattejava.http;
+import module org.lattejava.web;
 
 import org.lattejava.web.internal.*;
-import org.lattejava.web.middleware.*;
 
 /**
  * A lightweight web framework built on top of the Latte Java HTTP server.
@@ -108,9 +108,8 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Installs a {@link StaticResources} that serves files from the subdirectory named after the URL prefix
-   * (minus the leading slash). For example, {@code files("/assets")} serves {@code <baseDir>/assets/*} under
-   * {@code /assets/*}.
+   * Installs a {@link StaticResources} that serves files from the subdirectory named after the URL prefix (minus the
+   * leading slash). For example, {@code files("/assets")} serves {@code <baseDir>/assets/*} under {@code /assets/*}.
    *
    * @param urlPrefix The URL prefix this middleware will own.
    * @return This Web instance for chaining.

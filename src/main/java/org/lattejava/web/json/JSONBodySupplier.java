@@ -5,11 +5,10 @@
  */
 package org.lattejava.web.json;
 
-import java.io.*;
-
-import com.fasterxml.jackson.databind.*;
-import org.lattejava.http.server.*;
-import org.lattejava.web.*;
+import module com.fasterxml.jackson.databind;
+import module java.base;
+import module org.lattejava.http;
+import module org.lattejava.web;
 
 /**
  * A {@link BodySupplier} that parses the request body as JSON into an instance of the given type using Jackson.

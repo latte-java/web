@@ -5,23 +5,29 @@
  */
 package org.lattejava.web.tests.middleware;
 
-import java.net.http.HttpResponse;
-import java.util.Map;
+import module java.base;
+import module java.net.http;
+import module org.lattejava.http;
+import module org.lattejava.web;
+import module org.testng;
 
-import org.lattejava.http.server.HTTPRequest;
-import org.lattejava.http.server.HTTPResponse;
-import org.lattejava.web.middleware.ExceptionHandler;
-import org.lattejava.web.Web;
 import org.lattejava.web.tests.*;
-import org.testng.annotations.Test;
 
-import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.*;
 
 public class ExceptionHandlerTest extends BaseWebTest {
 
-  static class NotFoundException extends RuntimeException {
-    NotFoundException(String message) {
-      super(message);
+  @Test
+  public void exceptionMiddleware_globalInstall_mapsExceptionForAnyRoute() throws Exception {
+    try (var web = new Web()) {
+      web.install(new ExceptionHandler(Map.of(NotFoundException.class, 404)));
+      web.get("/missing", (_, _) -> {
+        throw new NotFoundException("not here");
+      });
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/missing");
+      assertEquals(response.statusCode(), 404);
     }
   }
 
@@ -29,42 +35,13 @@ public class ExceptionHandlerTest extends BaseWebTest {
   public void exceptionMiddleware_mapsThrownException() throws Exception {
     try (var web = new Web()) {
       web.install(new ExceptionHandler(Map.of(IllegalArgumentException.class, 400)));
-      web.get("/bad", (req, res) -> {
+      web.get("/bad", (_, _) -> {
         throw new IllegalArgumentException("nope");
       });
       web.start(PORT);
 
       HttpResponse<String> response = send("GET", "/bad");
       assertEquals(response.statusCode(), 400);
-    }
-  }
-
-  @Test
-  public void exceptionMiddleware_unmappedExceptionPropagates() throws Exception {
-    try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(IllegalStateException.class, 400)));
-      web.get("/unmapped", (req, res) -> {
-        throw new RuntimeException("unmapped");
-      });
-      web.start(PORT);
-
-      // RuntimeException isn't mapped; HTTPServer default handling returns 500
-      HttpResponse<String> response = send("GET", "/unmapped");
-      assertEquals(response.statusCode(), 500);
-    }
-  }
-
-  @Test
-  public void exceptionMiddleware_subclassWalksUpHierarchy() throws Exception {
-    try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(RuntimeException.class, 500)));
-      web.get("/subclass", (req, res) -> {
-        throw new IllegalStateException("subclass of RuntimeException");
-      });
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/subclass");
-      assertEquals(response.statusCode(), 500);
     }
   }
 
@@ -77,7 +54,7 @@ public class ExceptionHandlerTest extends BaseWebTest {
           RuntimeException.class, 500,
           IllegalArgumentException.class, 400
       )));
-      web.get("/specific", (req, res) -> {
+      web.get("/specific", (_, _) -> {
         throw new IllegalArgumentException("specific");
       });
       web.start(PORT);
@@ -91,7 +68,7 @@ public class ExceptionHandlerTest extends BaseWebTest {
   public void exceptionMiddleware_noExceptionPassesThrough() throws Exception {
     try (var web = new Web()) {
       web.install(new ExceptionHandler(Map.of(RuntimeException.class, 500)));
-      web.get("/ok", (req, res) -> res.setStatus(200));
+      web.get("/ok", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
       HttpResponse<String> response = send("GET", "/ok");
@@ -100,11 +77,20 @@ public class ExceptionHandlerTest extends BaseWebTest {
   }
 
   @Test
-  public void exceptionMiddleware_globalInstall_mapsExceptionForAnyRoute() throws Exception {
+  public void exceptionMiddleware_subclassCanOverrideLookupStatus() throws Exception {
+    // A subclass overrides lookupStatus() to compute the status dynamically.
+    var middleware = new ExceptionHandler(Map.of()) {
+      @Override
+      protected Integer lookupStatus(Class<?> type) {
+        // Any exception whose class name contains "NotFound" → 404; everything else falls through
+        return type.getSimpleName().contains("NotFound") ? 404 : null;
+      }
+    };
+
     try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(NotFoundException.class, 404)));
-      web.get("/missing", (req, res) -> {
-        throw new NotFoundException("not here");
+      web.install(middleware);
+      web.get("/missing", (_, _) -> {
+        throw new NotFoundException("no");
       });
       web.start(PORT);
 
@@ -127,7 +113,7 @@ public class ExceptionHandlerTest extends BaseWebTest {
 
     try (var web = new Web()) {
       web.install(middleware);
-      web.get("/err", (req, res) -> {
+      web.get("/err", (_, _) -> {
         throw new IllegalArgumentException("bad input");
       });
       web.start(PORT);
@@ -141,25 +127,37 @@ public class ExceptionHandlerTest extends BaseWebTest {
   }
 
   @Test
-  public void exceptionMiddleware_subclassCanOverrideLookupStatus() throws Exception {
-    // A subclass overrides lookupStatus() to compute the status dynamically.
-    var middleware = new ExceptionHandler(Map.of()) {
-      @Override
-      protected Integer lookupStatus(Class<?> type) {
-        // Any exception whose class name contains "NotFound" → 404; everything else falls through
-        return type.getSimpleName().contains("NotFound") ? 404 : null;
-      }
-    };
-
+  public void exceptionMiddleware_subclassWalksUpHierarchy() throws Exception {
     try (var web = new Web()) {
-      web.install(middleware);
-      web.get("/missing", (req, res) -> {
-        throw new NotFoundException("no");
+      web.install(new ExceptionHandler(Map.of(RuntimeException.class, 500)));
+      web.get("/subclass", (_, _) -> {
+        throw new IllegalStateException("subclass of RuntimeException");
       });
       web.start(PORT);
 
-      HttpResponse<String> response = send("GET", "/missing");
-      assertEquals(response.statusCode(), 404);
+      HttpResponse<String> response = send("GET", "/subclass");
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  @Test
+  public void exceptionMiddleware_unmappedExceptionPropagates() throws Exception {
+    try (var web = new Web()) {
+      web.install(new ExceptionHandler(Map.of(IllegalStateException.class, 400)));
+      web.get("/unmapped", (_, _) -> {
+        throw new RuntimeException("unmapped");
+      });
+      web.start(PORT);
+
+      // RuntimeException isn't mapped; HTTPServer default handling returns 500
+      HttpResponse<String> response = send("GET", "/unmapped");
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  static class NotFoundException extends RuntimeException {
+    NotFoundException(String message) {
+      super(message);
     }
   }
 }

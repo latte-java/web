@@ -1,8 +1,7 @@
 package org.lattejava.web.oidc.internal;
 
+import module org.lattejava.http;
 import module org.lattejava.web;
-
-import org.lattejava.http.server.*;
 
 /**
  * Handles the return from the OIDC logout endpoint.

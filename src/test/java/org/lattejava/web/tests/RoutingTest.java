@@ -5,15 +5,297 @@
  */
 package org.lattejava.web.tests;
 
-import java.net.http.HttpResponse;
-import java.util.List;
+import module java.base;
+import module java.net.http;
+import module org.lattejava.web;
+import module org.testng;
 
-import org.lattejava.web.Web;
-import org.testng.annotations.Test;
-
-import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.*;
 
 public class RoutingTest extends BaseWebTest {
+
+  @Test
+  public void delete() throws Exception {
+    try (var web = new Web()) {
+      web.delete("/test", (_, res) -> res.setStatus(204));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("DELETE", "/test");
+      assertEquals(response.statusCode(), 204);
+    }
+  }
+
+  @Test
+  public void get() throws Exception {
+    try (var web = new Web()) {
+      web.get("/test", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/test");
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void options() throws Exception {
+    try (var web = new Web()) {
+      web.options("/test", (_, res) -> res.setStatus(206));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("OPTIONS", "/test");
+      assertEquals(response.statusCode(), 206);
+    }
+  }
+
+  @Test
+  public void patch() throws Exception {
+    try (var web = new Web()) {
+      web.patch("/test", (_, res) -> res.setStatus(203));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("PATCH", "/test");
+      assertEquals(response.statusCode(), 203);
+    }
+  }
+
+  @Test
+  public void post() throws Exception {
+    try (var web = new Web()) {
+      web.post("/test", (_, res) -> res.setStatus(201));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("POST", "/test");
+      assertEquals(response.statusCode(), 201);
+    }
+  }
+
+  @Test
+  public void prefix() throws Exception {
+    try (var web = new Web()) {
+      web.prefix("/api", r -> r.get("/users", (_, res) -> res.setStatus(200)));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/api/users");
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void prefix_chaining() throws Exception {
+    try (var web = new Web()) {
+      web.prefix("/api", r -> r.get("/users", (_, res) -> res.setStatus(200))).get("/health", (_, res) -> res.setStatus(204));
+      web.start(PORT);
+
+      // Verify the prefixed route
+      HttpResponse<String> response1 = send("GET", "/api/users");
+      assertEquals(response1.statusCode(), 200);
+
+      // Verify the chained route is NOT prefixed
+      HttpResponse<String> response2 = send("GET", "/health");
+      assertEquals(response2.statusCode(), 204);
+    }
+  }
+
+  @Test
+  public void prefix_nested() throws Exception {
+    try (var web = new Web()) {
+      web.prefix("/api", r -> r.prefix("/admin", r2 -> r2.get("/stats", (_, res) -> res.setStatus(200))));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/api/admin/stats");
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void prefix_withPathParams() throws Exception {
+    try (var web = new Web()) {
+      web.prefix("/api", r -> r.get("/users/{id}", (req, res) -> {
+        res.setStatus(200);
+        res.setHeader("X-User-Id", (String) req.getAttribute("id"));
+      }));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/api/users/42");
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.headers().firstValue("X-User-Id").orElse(""), "42");
+    }
+  }
+
+  @Test
+  public void put() throws Exception {
+    try (var web = new Web()) {
+      web.put("/test", (_, res) -> res.setStatus(202));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("PUT", "/test");
+      assertEquals(response.statusCode(), 202);
+    }
+  }
+
+  @Test
+  public void route_404_hasEmptyBody() throws Exception {
+    try (var web = new Web()) {
+      web.get("/exists", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/missing");
+      assertEquals(response.statusCode(), 404);
+      assertEquals(response.body(), "");
+      assertEquals(response.headers().firstValue("Content-Length").orElse(null), "0");
+    }
+  }
+
+  @Test
+  public void route_405_aggregatesAllowedMethods() throws Exception {
+    try (var web = new Web()) {
+      web.get("/resource", (_, res) -> res.setStatus(200));
+      web.put("/resource", (_, res) -> res.setStatus(200));
+      web.delete("/resource", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("POST", "/resource");
+      assertEquals(response.statusCode(), 405);
+      assertEquals(response.headers().firstValue("Allow").orElse(""), "GET, PUT, DELETE");
+    }
+  }
+
+  @Test
+  public void route_405_hasEmptyBody() throws Exception {
+    try (var web = new Web()) {
+      web.get("/test", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("POST", "/test");
+      assertEquals(response.statusCode(), 405);
+      assertEquals(response.body(), "");
+      assertEquals(response.headers().firstValue("Content-Length").orElse(null), "0");
+    }
+  }
+
+  @Test
+  public void route_backtrackingFromStaticDeadEnd() throws Exception {
+    try (var web = new Web()) {
+      web.get("/users/{id}/posts", (req, res) -> {
+        res.setStatus(200);
+        res.setHeader("X-Id", (String) req.getAttribute("id"));
+      });
+      web.get("/users/new/profile", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/users/new/posts");
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.headers().firstValue("X-Id").orElse(""), "new");
+    }
+  }
+
+  @Test
+  public void route_bothBranchesMethodMismatch_aggregatesAllow() throws Exception {
+    // Static has GET, param has DELETE; requesting POST should return 405 with both
+    try (var web = new Web()) {
+      web.get("/users/new", (_, res) -> res.setStatus(200));
+      web.delete("/users/{id}", (_, res) -> res.setStatus(204));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("POST", "/users/new");
+      assertEquals(response.statusCode(), 405);
+      String allow = response.headers().firstValue("Allow").orElse("");
+      // Must contain both methods — order is static-first, param-second
+      assertEquals(allow, "GET, DELETE");
+    }
+  }
+
+  @Test
+  public void route_consecutiveSlashes() throws Exception {
+    // RFC 3986 allows empty segments: /foo//bar has three segments [foo, "", bar]
+    try (var web = new Web()) {
+      web.get("/foo//bar", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/foo//bar");
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void route_consecutiveSlashes_doNotMatchNormalizedPath() throws Exception {
+    // Verify /foo//bar and /foo/bar are distinct routes (no implicit normalization)
+    try (var web = new Web()) {
+      web.get("/foo//bar", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      // Request /foo/bar should NOT match /foo//bar
+      HttpResponse<String> response = send("GET", "/foo/bar");
+      assertEquals(response.statusCode(), 404);
+    }
+  }
+
+  @Test
+  public void route_duplicateMethodInList_isDeduplicated() throws Exception {
+    // Passing duplicate methods should be silently deduplicated to a single registration.
+    try (var web = new Web()) {
+      web.route(java.util.List.of("GET", "GET", "get"), "/test", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/test");
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void route_literalBeatsParam() throws Exception {
+    try (var web = new Web()) {
+      web.get("/users/{id}", (_, res) -> {
+        res.setStatus(200);
+        res.setHeader("X-Match", "param");
+      });
+      web.get("/users/new", (_, res) -> {
+        res.setStatus(200);
+        res.setHeader("X-Match", "literal");
+      });
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/users/new");
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.headers().firstValue("X-Match").orElse(""), "literal");
+    }
+  }
+
+  @Test
+  public void route_literalMethodMismatch_fallsThroughToParam() throws Exception {
+    // Static path matches but method doesn't; param path matches with correct method
+    try (var web = new Web()) {
+      web.get("/users/new", (_, res) -> {
+        res.setStatus(200);
+        res.setHeader("X-Match", "literal");
+      });
+      web.post("/users/{id}", (req, res) -> {
+        res.setStatus(201);
+        res.setHeader("X-Match", "param");
+        res.setHeader("X-Id", (String) req.getAttribute("id"));
+      });
+      web.start(PORT);
+
+      HttpResponse<String> response = send("POST", "/users/new");
+      assertEquals(response.statusCode(), 201);
+      assertEquals(response.headers().firstValue("X-Match").orElse(null), "param");
+      assertEquals(response.headers().firstValue("X-Id").orElse(null), "new");
+    }
+  }
+
+  @Test
+  public void route_literalSegmentMatchesEncodedRequestPath() throws Exception {
+    // A request with percent-encoded bytes in a literal position does NOT match a route
+    // that doesn't have the same encoded form in its pathSpec — because no implicit decoding occurs.
+    try (var web = new Web()) {
+      web.get("/hello", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      // Request /hello%20 — the trailing %20 is part of the segment, path becomes "hello%20" != "hello"
+      HttpResponse<String> response = send("GET", "/hello%20");
+      assertEquals(response.statusCode(), 404);
+    }
+  }
 
   @Test
   public void route_matchesMethod() throws Exception {
@@ -27,14 +309,27 @@ public class RoutingTest extends BaseWebTest {
   }
 
   @Test
-  public void route_wrongMethod_returns405() throws Exception {
+  public void route_methodsAreUpperCased() throws Exception {
     try (var web = new Web()) {
-      web.route(List.of("GET"), "/test", (_, res) -> res.setStatus(200));
+      web.route(List.of("get"), "/test", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
-      HttpResponse<String> response = send("POST", "/test");
-      assertEquals(response.statusCode(), 405);
-      assertEquals(response.headers().firstValue("Allow").orElse(""), "GET");
+      HttpResponse<String> response = send("GET", "/test");
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void route_multipleMethodsOnSameRoute() throws Exception {
+    try (var web = new Web()) {
+      web.route(List.of("GET", "POST"), "/form", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response1 = send("GET", "/form");
+      assertEquals(response1.statusCode(), 200);
+
+      HttpResponse<String> response2 = send("POST", "/form");
+      assertEquals(response2.statusCode(), 200);
     }
   }
 
@@ -83,147 +378,6 @@ public class RoutingTest extends BaseWebTest {
   }
 
   @Test
-  public void route_literalSegmentMatchesEncodedRequestPath() throws Exception {
-    // A request with percent-encoded bytes in a literal position does NOT match a route
-    // that doesn't have the same encoded form in its pathSpec — because no implicit decoding occurs.
-    try (var web = new Web()) {
-      web.get("/hello", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      // Request /hello%20 — the trailing %20 is part of the segment, path becomes "hello%20" != "hello"
-      HttpResponse<String> response = send("GET", "/hello%20");
-      assertEquals(response.statusCode(), 404);
-    }
-  }
-
-  @Test
-  public void route_405_aggregatesAllowedMethods() throws Exception {
-    try (var web = new Web()) {
-      web.get("/resource", (_, res) -> res.setStatus(200));
-      web.put("/resource", (_, res) -> res.setStatus(200));
-      web.delete("/resource", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("POST", "/resource");
-      assertEquals(response.statusCode(), 405);
-      assertEquals(response.headers().firstValue("Allow").orElse(""), "GET, PUT, DELETE");
-    }
-  }
-
-  @Test
-  public void route_405_hasEmptyBody() throws Exception {
-    try (var web = new Web()) {
-      web.get("/test", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("POST", "/test");
-      assertEquals(response.statusCode(), 405);
-      assertEquals(response.body(), "");
-      assertEquals(response.headers().firstValue("Content-Length").orElse(null), "0");
-    }
-  }
-
-  @Test
-  public void route_404_hasEmptyBody() throws Exception {
-    try (var web = new Web()) {
-      web.get("/exists", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/missing");
-      assertEquals(response.statusCode(), 404);
-      assertEquals(response.body(), "");
-      assertEquals(response.headers().firstValue("Content-Length").orElse(null), "0");
-    }
-  }
-
-  @Test
-  public void route_multipleMethodsOnSameRoute() throws Exception {
-    try (var web = new Web()) {
-      web.route(List.of("GET", "POST"), "/form", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response1 = send("GET", "/form");
-      assertEquals(response1.statusCode(), 200);
-
-      HttpResponse<String> response2 = send("POST", "/form");
-      assertEquals(response2.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void route_literalBeatsParam() throws Exception {
-    try (var web = new Web()) {
-      web.get("/users/{id}", (_, res) -> {
-        res.setStatus(200);
-        res.setHeader("X-Match", "param");
-      });
-      web.get("/users/new", (_, res) -> {
-        res.setStatus(200);
-        res.setHeader("X-Match", "literal");
-      });
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/users/new");
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.headers().firstValue("X-Match").orElse(""), "literal");
-    }
-  }
-
-  @Test
-  public void route_literalMethodMismatch_fallsThroughToParam() throws Exception {
-    // Static path matches but method doesn't; param path matches with correct method
-    try (var web = new Web()) {
-      web.get("/users/new", (_, res) -> {
-        res.setStatus(200);
-        res.setHeader("X-Match", "literal");
-      });
-      web.post("/users/{id}", (req, res) -> {
-        res.setStatus(201);
-        res.setHeader("X-Match", "param");
-        res.setHeader("X-Id", (String) req.getAttribute("id"));
-      });
-      web.start(PORT);
-
-      HttpResponse<String> response = send("POST", "/users/new");
-      assertEquals(response.statusCode(), 201);
-      assertEquals(response.headers().firstValue("X-Match").orElse(null), "param");
-      assertEquals(response.headers().firstValue("X-Id").orElse(null), "new");
-    }
-  }
-
-  @Test
-  public void route_bothBranchesMethodMismatch_aggregatesAllow() throws Exception {
-    // Static has GET, param has DELETE; requesting POST should return 405 with both
-    try (var web = new Web()) {
-      web.get("/users/new", (_, res) -> res.setStatus(200));
-      web.delete("/users/{id}", (_, res) -> res.setStatus(204));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("POST", "/users/new");
-      assertEquals(response.statusCode(), 405);
-      String allow = response.headers().firstValue("Allow").orElse("");
-      // Must contain both methods — order is static-first, param-second
-      assertEquals(allow, "GET, DELETE");
-    }
-  }
-
-  @Test
-  public void route_backtrackingFromStaticDeadEnd() throws Exception {
-    try (var web = new Web()) {
-      web.get("/users/{id}/posts", (req, res) -> {
-        res.setStatus(200);
-        res.setHeader("X-Id", (String) req.getAttribute("id"));
-      });
-      web.get("/users/new/profile", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/users/new/posts");
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.headers().firstValue("X-Id").orElse(""), "new");
-    }
-  }
-
-  @Test
   public void route_rootPath() throws Exception {
     try (var web = new Web()) {
       web.get("/", (_, res) -> res.setStatus(200));
@@ -231,31 +385,6 @@ public class RoutingTest extends BaseWebTest {
 
       HttpResponse<String> response = send("GET", "/");
       assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void route_consecutiveSlashes() throws Exception {
-    // RFC 3986 allows empty segments: /foo//bar has three segments [foo, "", bar]
-    try (var web = new Web()) {
-      web.get("/foo//bar", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/foo//bar");
-      assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void route_consecutiveSlashes_doNotMatchNormalizedPath() throws Exception {
-    // Verify /foo//bar and /foo/bar are distinct routes (no implicit normalization)
-    try (var web = new Web()) {
-      web.get("/foo//bar", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      // Request /foo/bar should NOT match /foo//bar
-      HttpResponse<String> response = send("GET", "/foo/bar");
-      assertEquals(response.statusCode(), 404);
     }
   }
 
@@ -338,144 +467,14 @@ public class RoutingTest extends BaseWebTest {
   }
 
   @Test
-  public void route_duplicateMethodInList_isDeduplicated() throws Exception {
-    // Passing duplicate methods should be silently deduplicated to a single registration.
+  public void route_wrongMethod_returns405() throws Exception {
     try (var web = new Web()) {
-      web.route(java.util.List.of("GET", "GET", "get"), "/test", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/test");
-      assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void route_methodsAreUpperCased() throws Exception {
-    try (var web = new Web()) {
-      web.route(List.of("get"), "/test", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/test");
-      assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void get() throws Exception {
-    try (var web = new Web()) {
-      web.get("/test", (_, res) -> res.setStatus(200));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/test");
-      assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void post() throws Exception {
-    try (var web = new Web()) {
-      web.post("/test", (_, res) -> res.setStatus(201));
+      web.route(List.of("GET"), "/test", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
       HttpResponse<String> response = send("POST", "/test");
-      assertEquals(response.statusCode(), 201);
-    }
-  }
-
-  @Test
-  public void put() throws Exception {
-    try (var web = new Web()) {
-      web.put("/test", (_, res) -> res.setStatus(202));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("PUT", "/test");
-      assertEquals(response.statusCode(), 202);
-    }
-  }
-
-  @Test
-  public void delete() throws Exception {
-    try (var web = new Web()) {
-      web.delete("/test", (_, res) -> res.setStatus(204));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("DELETE", "/test");
-      assertEquals(response.statusCode(), 204);
-    }
-  }
-
-  @Test
-  public void patch() throws Exception {
-    try (var web = new Web()) {
-      web.patch("/test", (_, res) -> res.setStatus(203));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("PATCH", "/test");
-      assertEquals(response.statusCode(), 203);
-    }
-  }
-
-  @Test
-  public void options() throws Exception {
-    try (var web = new Web()) {
-      web.options("/test", (_, res) -> res.setStatus(206));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("OPTIONS", "/test");
-      assertEquals(response.statusCode(), 206);
-    }
-  }
-
-  @Test
-  public void prefix() throws Exception {
-    try (var web = new Web()) {
-      web.prefix("/api", r -> r.get("/users", (_, res) -> res.setStatus(200)));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/api/users");
-      assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void prefix_nested() throws Exception {
-    try (var web = new Web()) {
-      web.prefix("/api", r -> r.prefix("/admin", r2 -> r2.get("/stats", (_, res) -> res.setStatus(200))));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/api/admin/stats");
-      assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void prefix_chaining() throws Exception {
-    try (var web = new Web()) {
-      web.prefix("/api", r -> r.get("/users", (_, res) -> res.setStatus(200))).get("/health", (_, res) -> res.setStatus(204));
-      web.start(PORT);
-
-      // Verify the prefixed route
-      HttpResponse<String> response1 = send("GET", "/api/users");
-      assertEquals(response1.statusCode(), 200);
-
-      // Verify the chained route is NOT prefixed
-      HttpResponse<String> response2 = send("GET", "/health");
-      assertEquals(response2.statusCode(), 204);
-    }
-  }
-
-  @Test
-  public void prefix_withPathParams() throws Exception {
-    try (var web = new Web()) {
-      web.prefix("/api", r -> r.get("/users/{id}", (req, res) -> {
-        res.setStatus(200);
-        res.setHeader("X-User-Id", (String) req.getAttribute("id"));
-      }));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/api/users/42");
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.headers().firstValue("X-User-Id").orElse(""), "42");
+      assertEquals(response.statusCode(), 405);
+      assertEquals(response.headers().firstValue("Allow").orElse(""), "GET");
     }
   }
 }

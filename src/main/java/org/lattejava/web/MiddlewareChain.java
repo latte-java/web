@@ -5,12 +5,11 @@
  */
 package org.lattejava.web;
 
-import org.lattejava.http.server.HTTPRequest;
-import org.lattejava.http.server.HTTPResponse;
+import module org.lattejava.http;
 
 /**
- * The middleware chain. Calling {@link #next} invokes the next middleware, or the handler if no
- * more middlewares remain. Not calling {@link #next} short-circuits the chain.
+ * The middleware chain. Calling {@link #next} invokes the next middleware, or the handler if no more middlewares
+ * remain. Not calling {@link #next} short-circuits the chain.
  *
  * @author Brian Pontarelli
  */

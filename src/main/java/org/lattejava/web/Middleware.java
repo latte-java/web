@@ -5,8 +5,7 @@
  */
 package org.lattejava.web;
 
-import org.lattejava.http.server.HTTPRequest;
-import org.lattejava.http.server.HTTPResponse;
+import module org.lattejava.http;
 
 /**
  * A middleware intercepts requests in the pipeline. It can:
