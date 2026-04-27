@@ -21,8 +21,12 @@ public final class FusionAuthFixture {
   public static final String API_KEY = "bf69486b-4733-4470-a592-f1bfce7af580";
   public static final String DEFAULT_PASSWORD = "password";
   public static final String FA_BASE_URL = "http://localhost:9011";
+  public static final String FAST_APP_ID = "20000000-0000-0000-0000-000000000002";
+  public static final String FAST_APP_SECRET = "fast-app-secret-1234567890abcdef01234";
   public static final String KEYCLOAK_APP_ID = "10000000-0000-0000-0000-000000000004";
   public static final String KEYCLOAK_APP_SECRET = "keycloak-app-secret-1234567890abcdef0";
+  public static final String ROTATING_APP_ID = "10000000-0000-0000-0000-000000000003";
+  public static final String ROTATING_APP_SECRET = "rotating-refresh-app-secret-12345678";
   public static final String STANDARD_ADMIN_ID = "10000000-0000-0000-0000-000000000011";
   public static final String STANDARD_APP_ID = "10000000-0000-0000-0000-000000000002";
   public static final String STANDARD_APP_SECRET = "standard-app-secret-1234567890abcdef";
@@ -31,7 +35,9 @@ public final class FusionAuthFixture {
   public static final String STANDARD_USER_ID = "10000000-0000-0000-0000-000000000010";
   public static final String USER_EMAIL = "user@example.com";
   private static final Map<String, String> APP_SECRETS = Map.of(
+      FAST_APP_ID, FAST_APP_SECRET,
       KEYCLOAK_APP_ID, KEYCLOAK_APP_SECRET,
+      ROTATING_APP_ID, ROTATING_APP_SECRET,
       STANDARD_APP_ID, STANDARD_APP_SECRET
   );
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -108,7 +114,7 @@ public final class FusionAuthFixture {
   }
 
   /**
-   * Drives the full OIDC authorization-code flow against FusionAuth and returns the issued access token (JWT).
+   * Drives the full OIDC authorization-code flow against FusionAuth and returns all three issued tokens.
    * <p>
    * Walks the hosted-login flow via {@link #fetchAuthorizationCode} to obtain an authorization code, then exchanges
    * the code at {@code /oauth2/token} (HTTP Basic with the app's {@code client_secret}, PKCE {@code code_verifier}).
@@ -119,9 +125,9 @@ public final class FusionAuthFixture {
    * @param password      The user's password.
    * @param applicationId The application UUID to authenticate against. Must be one of the kickstart-provisioned
    *                      apps tracked in {@link #APP_SECRETS}.
-   * @return The access token JWT.
+   * @return The access, refresh, and id tokens (any may be null if the IdP omits them).
    */
-  public static String login(String email, String password, String applicationId) throws Exception {
+  public static Tokens login(String email, String password, String applicationId) throws Exception {
     String secret = APP_SECRETS.get(applicationId);
     if (secret == null) {
       throw new IllegalArgumentException("Unknown applicationId [" + applicationId + "] — add to FusionAuthFixture.APP_SECRETS");
@@ -150,11 +156,17 @@ public final class FusionAuthFixture {
       }
 
       JsonNode json = MAPPER.readTree(res.body());
-      JsonNode token = json.get("access_token");
-      if (token == null || token.isNull()) {
+      JsonNode access = json.get("access_token");
+      if (access == null || access.isNull()) {
         throw new IllegalStateException("FusionAuth token response missing [access_token]: [" + res.body() + "]");
       }
-      return token.asText();
+      JsonNode refresh = json.get("refresh_token");
+      JsonNode id = json.get("id_token");
+      return new Tokens(
+          access.asText(),
+          refresh != null && !refresh.isNull() ? refresh.asText() : null,
+          id != null && !id.isNull() ? id.asText() : null
+      );
     }
   }
 
@@ -201,5 +213,12 @@ public final class FusionAuthFixture {
    * single-value scheme — set it as the {@code oidc_state} cookie when invoking the callback under test.
    */
   public record AuthorizationCode(String code, String state) {
+  }
+
+  /**
+   * The output of {@link #login} — the bundle the IdP returned from the token-exchange step. {@code refreshToken}
+   * and {@code idToken} are nullable; {@code accessToken} is always present (or {@code fetchTokens} would have thrown).
+   */
+  public record Tokens(String accessToken, String refreshToken, String idToken) {
   }
 }

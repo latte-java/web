@@ -51,7 +51,7 @@ public class AuthenticatedTest extends BaseWebTest {
 
   @Test
   public void validAccessToken_callsHandler_withTranslatedUser() throws Exception {
-    String accessToken = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    String accessToken = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
 
     try (var web = new Web()) {
       web.install(oidc);

@@ -57,7 +57,7 @@ public class RolesTest extends BaseWebTest {
                            })
                            .build();
     OIDC<?> keycloakOIDC = OIDC.create(config);
-    String token = login(ADMIN_EMAIL, DEFAULT_PASSWORD, KEYCLOAK_APP_ID);
+    String token = login(ADMIN_EMAIL, DEFAULT_PASSWORD, KEYCLOAK_APP_ID).accessToken();
 
     try (var web = new Web()) {
       web.install(keycloakOIDC);
@@ -79,7 +79,7 @@ public class RolesTest extends BaseWebTest {
 
   @Test
   public void hasAllRoles_userAndModerator_passesForUser() throws Exception {
-    String token = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    String token = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
       web.install(oidc);
       web.prefix("/protected", p -> {
@@ -95,7 +95,7 @@ public class RolesTest extends BaseWebTest {
 
   @Test
   public void hasAllRoles_userAndModerator_returns403ForAdmin() throws Exception {
-    String token = login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    String token = login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
       web.install(oidc);
       web.prefix("/protected", p -> {
@@ -125,7 +125,7 @@ public class RolesTest extends BaseWebTest {
 
   @Test
   public void hasAnyRole_admin_passesForAdmin() throws Exception {
-    String token = login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    String token = login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
       web.install(oidc);
       web.prefix("/admin", p -> {
@@ -141,7 +141,7 @@ public class RolesTest extends BaseWebTest {
 
   @Test
   public void hasAnyRole_admin_returns403ForUser() throws Exception {
-    String token = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    String token = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
       web.install(oidc);
       web.prefix("/admin", p -> {
