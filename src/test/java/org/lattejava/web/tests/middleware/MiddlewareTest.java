@@ -5,16 +5,58 @@
  */
 package org.lattejava.web.tests.middleware;
 
-import java.net.http.HttpResponse;
+import module java.net.http;
+import module org.lattejava.web;
+import module org.testng;
 
-import org.lattejava.web.Middleware;
-import org.lattejava.web.Web;
 import org.lattejava.web.tests.*;
-import org.testng.annotations.Test;
 
-import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.*;
 
 public class MiddlewareTest extends BaseWebTest {
+
+  @Test
+  public void middleware_404OutsidePrefix_doesNotRunPrefixMiddlewares() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.install((req, res, chain) -> {
+        order.add("root");
+        chain.next(req, res);
+      });
+      web.prefix("/api", api -> api.install((req, res, chain) -> {
+        order.add("api-mw");
+        chain.next(req, res);
+      }));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/other");
+      assertEquals(response.statusCode(), 404);
+      assertEquals(order, java.util.List.of("root"));
+    }
+  }
+
+  @Test
+  public void middleware_405_doesNotRunAnyMiddlewares() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.install((req, res, chain) -> {
+        order.add("root");
+        chain.next(req, res);
+      });
+      web.prefix("/api", api -> {
+        api.install((req, res, chain) -> {
+          order.add("api-mw");
+          chain.next(req, res);
+        });
+        api.get("/users", (_, res) -> res.setStatus(200));
+      });
+      web.start(PORT);
+
+      HttpResponse<String> response = send("POST", "/api/users");
+      assertEquals(response.statusCode(), 405);
+      assertEquals(order, java.util.List.of());
+    }
+  }
 
   @Test
   public void middleware_canModifyResponseAfterHandler() throws Exception {
@@ -66,11 +108,59 @@ public class MiddlewareTest extends BaseWebTest {
     }
   }
 
+  @Test
+  public void middleware_installAfterRouteInSamePrefix_stillApplies() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.prefix("/api", api -> {
+        api.get("/users", (_, res) -> {
+          order.add("handler");
+          res.setStatus(200);
+        });
+        api.install((req, res, chain) -> {
+          order.add("api-mw");
+          chain.next(req, res);
+        });
+      });
+      web.start(PORT);
+
+      send("GET", "/api/users");
+      assertEquals(order, java.util.List.of("api-mw", "handler"));
+    }
+  }
+
   @Test(expectedExceptions = IllegalStateException.class)
   public void middleware_installAfterStart_throws() {
     try (var web = new Web()) {
       web.start(PORT);
       web.install((req, res, chain) -> chain.next(req, res));
+    }
+  }
+
+  @Test
+  public void middleware_installInsidePrefix_doesNotApplyOutside() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.prefix("/api", api -> {
+        api.install((req, res, chain) -> {
+          order.add("api-mw");
+          chain.next(req, res);
+        });
+        api.get("/users", (_, res) -> {
+          order.add("api-handler");
+          res.setStatus(200);
+        });
+      });
+      web.get("/other", (_, res) -> {
+        order.add("other-handler");
+        res.setStatus(200);
+      });
+      web.start(PORT);
+
+      send("GET", "/api/users");
+      send("GET", "/other");
+
+      assertEquals(order, java.util.List.of("api-mw", "api-handler", "other-handler"));
     }
   }
 
@@ -131,6 +221,56 @@ public class MiddlewareTest extends BaseWebTest {
   }
 
   @Test
+  public void middleware_multipleInstallsOnSamePrefix_preserveOrder() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.prefix("/api", api -> {
+        api.install((req, res, chain) -> {
+          order.add("a");
+          chain.next(req, res);
+        });
+        api.install((req, res, chain) -> {
+          order.add("b");
+          chain.next(req, res);
+        });
+        api.get("/users", (_, res) -> {
+          order.add("handler");
+          res.setStatus(200);
+        });
+      });
+      web.start(PORT);
+
+      send("GET", "/api/users");
+      assertEquals(order, java.util.List.of("a", "b", "handler"));
+    }
+  }
+
+  @Test
+  public void middleware_nestedPrefix_outerRunsBeforeInner() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.install((req, res, chain) -> {
+        order.add("root");
+        chain.next(req, res);
+      });
+      web.prefix("/api", api -> api.install((req, res, chain) -> {
+        order.add("api");
+        chain.next(req, res);
+      }).prefix("/v1", v1 -> v1.install((req, res, chain) -> {
+        order.add("v1");
+        chain.next(req, res);
+      }).get("/users", (_, res) -> {
+        order.add("handler");
+        res.setStatus(200);
+      })));
+      web.start(PORT);
+
+      send("GET", "/api/v1/users");
+      assertEquals(order, java.util.List.of("root", "api", "v1", "handler"));
+    }
+  }
+
+  @Test
   public void middleware_noMiddlewares_stillWorks() throws Exception {
     try (var web = new Web()) {
       web.get("/test", (_, res) -> res.setStatus(200));
@@ -150,6 +290,32 @@ public class MiddlewareTest extends BaseWebTest {
   public void middleware_nullRouteMiddleware_throws() {
     new Web().get("/test", (_, _) -> {
     }, (Middleware) null);
+  }
+
+  @Test
+  public void middleware_perRouteRunsAfterPrefix() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.prefix("/api", api -> {
+        api.install((req, res, chain) -> {
+          order.add("prefix");
+          chain.next(req, res);
+        });
+        api.get("/users",
+            (_, res) -> {
+              order.add("handler");
+              res.setStatus(200);
+            },
+            (req, res, chain) -> {
+              order.add("per-route");
+              chain.next(req, res);
+            });
+      });
+      web.start(PORT);
+
+      send("GET", "/api/users");
+      assertEquals(order, java.util.List.of("prefix", "per-route", "handler"));
+    }
   }
 
   @Test
@@ -174,6 +340,41 @@ public class MiddlewareTest extends BaseWebTest {
       send("GET", "/b");
 
       assertEquals(order, java.util.List.of("m", "handler-a", "handler-b"));
+    }
+  }
+
+  @Test
+  public void middleware_prefix404_runsPrefixMiddlewares() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.prefix("/api", api -> api.install((req, res, chain) -> {
+        order.add("api-mw");
+        chain.next(req, res);
+      }));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/api/nothing");
+      assertEquals(response.statusCode(), 404);
+      assertEquals(order, java.util.List.of("api-mw"));
+    }
+  }
+
+  @Test
+  public void middleware_prefixBoundary_apixDoesNotMatchApiPrefix() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.prefix("/api", api -> api.install((req, res, chain) -> {
+        order.add("api-mw");
+        chain.next(req, res);
+      }));
+      web.get("/apix", (_, res) -> {
+        order.add("apix-handler");
+        res.setStatus(200);
+      });
+      web.start(PORT);
+
+      send("GET", "/apix");
+      assertEquals(order, java.util.List.of("apix-handler"));
     }
   }
 
@@ -205,208 +406,6 @@ public class MiddlewareTest extends BaseWebTest {
 
       HttpResponse<String> response = send("GET", "/secured");
       assertEquals(response.statusCode(), 401);
-    }
-  }
-
-  @Test
-  public void middleware_installInsidePrefix_doesNotApplyOutside() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.prefix("/api", api -> {
-        api.install((req, res, chain) -> {
-          order.add("api-mw");
-          chain.next(req, res);
-        });
-        api.get("/users", (_, res) -> {
-          order.add("api-handler");
-          res.setStatus(200);
-        });
-      });
-      web.get("/other", (_, res) -> {
-        order.add("other-handler");
-        res.setStatus(200);
-      });
-      web.start(PORT);
-
-      send("GET", "/api/users");
-      send("GET", "/other");
-
-      assertEquals(order, java.util.List.of("api-mw", "api-handler", "other-handler"));
-    }
-  }
-
-  @Test
-  public void middleware_nestedPrefix_outerRunsBeforeInner() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.install((req, res, chain) -> {
-        order.add("root");
-        chain.next(req, res);
-      });
-      web.prefix("/api", api -> api.install((req, res, chain) -> {
-        order.add("api");
-        chain.next(req, res);
-      }).prefix("/v1", v1 -> v1.install((req, res, chain) -> {
-        order.add("v1");
-        chain.next(req, res);
-      }).get("/users", (_, res) -> {
-        order.add("handler");
-        res.setStatus(200);
-      })));
-      web.start(PORT);
-
-      send("GET", "/api/v1/users");
-      assertEquals(order, java.util.List.of("root", "api", "v1", "handler"));
-    }
-  }
-
-  @Test
-  public void middleware_prefixBoundary_apixDoesNotMatchApiPrefix() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.prefix("/api", api -> api.install((req, res, chain) -> {
-        order.add("api-mw");
-        chain.next(req, res);
-      }));
-      web.get("/apix", (_, res) -> {
-        order.add("apix-handler");
-        res.setStatus(200);
-      });
-      web.start(PORT);
-
-      send("GET", "/apix");
-      assertEquals(order, java.util.List.of("apix-handler"));
-    }
-  }
-
-  @Test
-  public void middleware_installAfterRouteInSamePrefix_stillApplies() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.prefix("/api", api -> {
-        api.get("/users", (_, res) -> {
-          order.add("handler");
-          res.setStatus(200);
-        });
-        api.install((req, res, chain) -> {
-          order.add("api-mw");
-          chain.next(req, res);
-        });
-      });
-      web.start(PORT);
-
-      send("GET", "/api/users");
-      assertEquals(order, java.util.List.of("api-mw", "handler"));
-    }
-  }
-
-  @Test
-  public void middleware_prefix404_runsPrefixMiddlewares() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.prefix("/api", api -> api.install((req, res, chain) -> {
-        order.add("api-mw");
-        chain.next(req, res);
-      }));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/api/nothing");
-      assertEquals(response.statusCode(), 404);
-      assertEquals(order, java.util.List.of("api-mw"));
-    }
-  }
-
-  @Test
-  public void middleware_404OutsidePrefix_doesNotRunPrefixMiddlewares() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.install((req, res, chain) -> {
-        order.add("root");
-        chain.next(req, res);
-      });
-      web.prefix("/api", api -> api.install((req, res, chain) -> {
-        order.add("api-mw");
-        chain.next(req, res);
-      }));
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/other");
-      assertEquals(response.statusCode(), 404);
-      assertEquals(order, java.util.List.of("root"));
-    }
-  }
-
-  @Test
-  public void middleware_405_doesNotRunAnyMiddlewares() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.install((req, res, chain) -> {
-        order.add("root");
-        chain.next(req, res);
-      });
-      web.prefix("/api", api -> {
-        api.install((req, res, chain) -> {
-          order.add("api-mw");
-          chain.next(req, res);
-        });
-        api.get("/users", (_, res) -> res.setStatus(200));
-      });
-      web.start(PORT);
-
-      HttpResponse<String> response = send("POST", "/api/users");
-      assertEquals(response.statusCode(), 405);
-      assertEquals(order, java.util.List.of());
-    }
-  }
-
-  @Test
-  public void middleware_multipleInstallsOnSamePrefix_preserveOrder() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.prefix("/api", api -> {
-        api.install((req, res, chain) -> {
-          order.add("a");
-          chain.next(req, res);
-        });
-        api.install((req, res, chain) -> {
-          order.add("b");
-          chain.next(req, res);
-        });
-        api.get("/users", (_, res) -> {
-          order.add("handler");
-          res.setStatus(200);
-        });
-      });
-      web.start(PORT);
-
-      send("GET", "/api/users");
-      assertEquals(order, java.util.List.of("a", "b", "handler"));
-    }
-  }
-
-  @Test
-  public void middleware_perRouteRunsAfterPrefix() throws Exception {
-    try (var web = new Web()) {
-      var order = new java.util.ArrayList<String>();
-      web.prefix("/api", api -> {
-        api.install((req, res, chain) -> {
-          order.add("prefix");
-          chain.next(req, res);
-        });
-        api.get("/users",
-            (_, res) -> {
-              order.add("handler");
-              res.setStatus(200);
-            },
-            (req, res, chain) -> {
-              order.add("per-route");
-              chain.next(req, res);
-            });
-      });
-      web.start(PORT);
-
-      send("GET", "/api/users");
-      assertEquals(order, java.util.List.of("prefix", "per-route", "handler"));
     }
   }
 }

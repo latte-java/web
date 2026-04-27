@@ -7,8 +7,7 @@ package org.lattejava.web.middleware;
 
 import module java.base;
 import module org.lattejava.http;
-
-import org.lattejava.web.*;
+import module org.lattejava.web;
 
 /**
  * A middleware that serves static files from the server's {@link HTTPContext#baseDir}.
@@ -170,8 +169,8 @@ public class StaticResources implements Middleware {
   }
 
   /**
-   * Optional filter for {@link StaticResources} requests. Implementations can inspect the request and URI and
-   * return {@code false} to skip static-file resolution (falling through to the rest of the pipeline).
+   * Optional filter for {@link StaticResources} requests. Implementations can inspect the request and URI and return
+   * {@code false} to skip static-file resolution (falling through to the rest of the pipeline).
    *
    * @author Brian Pontarelli
    */

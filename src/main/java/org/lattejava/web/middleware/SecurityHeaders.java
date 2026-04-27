@@ -6,8 +6,7 @@
 package org.lattejava.web.middleware;
 
 import module org.lattejava.http;
-
-import org.lattejava.web.*;
+import module org.lattejava.web;
 
 /**
  * A middleware that emits a strict set of HTTP security headers on every response. Headers are written to the response

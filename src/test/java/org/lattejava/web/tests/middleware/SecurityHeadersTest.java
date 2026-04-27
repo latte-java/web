@@ -5,12 +5,11 @@
  */
 package org.lattejava.web.tests.middleware;
 
-import java.net.http.*;
+import module java.net.http;
+import module org.lattejava.web;
+import module org.testng;
 
-import org.lattejava.web.*;
-import org.lattejava.web.middleware.*;
 import org.lattejava.web.tests.*;
-import org.testng.annotations.*;
 
 import static org.testng.Assert.*;
 
