@@ -6,6 +6,7 @@ module org.lattejava.web {
 
   exports org.lattejava.web;
   exports org.lattejava.web.json;
+  exports org.lattejava.web.log;
   exports org.lattejava.web.middleware;
   exports org.lattejava.web.oidc;
   exports org.lattejava.web.oidc.internal;

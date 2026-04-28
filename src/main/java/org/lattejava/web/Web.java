@@ -10,6 +10,7 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 import org.lattejava.web.internal.*;
+import org.lattejava.web.log.WebPrintStreamLoggerFactory;
 
 /**
  * A lightweight web framework built on top of the Latte Java HTTP server.
@@ -24,6 +25,8 @@ public class Web implements AutoCloseable {
   private final AtomicBoolean started;
   private final RouteTrie trie;
   private Path baseDir;
+  private Level logLevel;
+  private LoggerFactory loggerFactory;
   private HTTPServer server;
   private Thread shutdownHook;
 
@@ -41,6 +44,20 @@ public class Web implements AutoCloseable {
     this.trie = trie;
     this.started = started;
     this.middlewareTrie = middlewareTrie;
+  }
+
+  private static String buildURL(HTTPListenerConfiguration listener) {
+    String scheme = listener.isTLS() ? "https" : "http";
+    InetAddress address = listener.getBindAddress();
+    String host;
+    if (address.isAnyLocalAddress()) {
+      host = "localhost";
+    } else if (address instanceof Inet6Address) {
+      host = "[" + address.getHostAddress() + "]";
+    } else {
+      host = address.getHostAddress();
+    }
+    return scheme + "://" + host + ":" + listener.getPort();
   }
 
   private static boolean isValidMethodToken(String method) {
@@ -167,6 +184,41 @@ public class Web implements AutoCloseable {
     }
 
     middlewareTrie.install(pathPrefix, middlewares);
+    return this;
+  }
+
+  /**
+   * Sets the level applied to the logger this Web instance retrieves from its {@link LoggerFactory}. If the factory
+   * shares a single logger across classes (as the bundled factories do), this also affects the logger used by the
+   * underlying HTTP server.
+   *
+   * @param logLevel The level.
+   * @return This Web instance for chaining.
+   * @throws IllegalStateException if called after {@link #start(int)}.
+   */
+  public Web logLevel(Level logLevel) {
+    if (started.get()) {
+      throw new IllegalStateException("Cannot set logLevel after Web has been started");
+    }
+    Objects.requireNonNull(logLevel, "logLevel must not be null");
+    this.logLevel = logLevel;
+    return this;
+  }
+
+  /**
+   * Sets the {@link LoggerFactory} used by this Web instance and the underlying HTTP server. If not called, the default
+   * is {@link WebPrintStreamLoggerFactory#FACTORY}.
+   *
+   * @param loggerFactory The factory.
+   * @return This Web instance for chaining.
+   * @throws IllegalStateException if called after {@link #start(int)}.
+   */
+  public Web loggerFactory(LoggerFactory loggerFactory) {
+    if (started.get()) {
+      throw new IllegalStateException("Cannot set loggerFactory after Web has been started");
+    }
+    Objects.requireNonNull(loggerFactory, "loggerFactory must not be null");
+    this.loggerFactory = loggerFactory;
     return this;
   }
 
@@ -361,22 +413,30 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Starts the HTTP server on the given port.
+   * Starts the HTTP server using the given listener configuration.
    *
-   * @param port The port to listen on.
+   * @param listener The listener configuration.
    * @return This Web instance for chaining.
    */
-  public Web start(int port) {
+  public Web start(HTTPListenerConfiguration listener) {
     if (isChild) {
       throw new IllegalStateException("Cannot call start on a prefix child Web instance");
     }
     if (started.get()) {
       throw new IllegalStateException("Web has already been started");
     }
+    Objects.requireNonNull(listener, "listener must not be null");
+
+    LoggerFactory factory = loggerFactory != null ? loggerFactory : WebPrintStreamLoggerFactory.FACTORY;
+    Logger log = factory.getLogger(Web.class);
+    if (logLevel != null) {
+      log.setLevel(logLevel);
+    }
 
     HTTPServer newServer = new HTTPServer()
         .withHandler(this::handleRequest)
-        .withListener(new HTTPListenerConfiguration(port))
+        .withListener(listener)
+        .withLoggerFactory(factory)
         .withBaseDir(baseDir != null ? baseDir : Paths.get(".")) // Default to current working directory
         .start();
 
@@ -393,7 +453,19 @@ public class Web implements AutoCloseable {
     server = newServer;
     shutdownHook = hook;
     started.set(true);
+
+    log.info("Web application is available at [{}]", buildURL(listener));
     return this;
+  }
+
+  /**
+   * Starts the HTTP server on the given port using a default listener configuration (non-TLS, all interfaces).
+   *
+   * @param port The port to listen on.
+   * @return This Web instance for chaining.
+   */
+  public Web start(int port) {
+    return start(new HTTPListenerConfiguration(port));
   }
 
   private void closeServer() {

@@ -16,7 +16,7 @@ This change makes the `LoggerFactory` swappable, ships a Web-specific default th
 Two pre-start setters and one `start` overload. All locked after `start()` (matching `baseDir(...)` semantics).
 
 ```java
-public Web loggerFactory(LoggerFactory loggerFactory)   // default = WebStdoutLoggerFactory.FACTORY
+public Web loggerFactory(LoggerFactory loggerFactory)   // default = WebPrintStreamLoggerFactory.FACTORY
 public Web logLevel(Level level)                        // default = Level.Info
 public Web start(HTTPListenerConfiguration listener)    // new overload
 public Web start(int port)                              // becomes start(new HTTPListenerConfiguration(port))
@@ -32,36 +32,39 @@ public Web start(int port)                              // becomes start(new HTT
 
 ## Default logger: `org.lattejava.web.log`
 
-A new exported subpackage holds two classes, mirroring the `org.lattejava.http.log.SystemOutLogger` / `SystemOutLoggerFactory` pair.
+A new exported subpackage holds two classes, loosely mirroring the `org.lattejava.http.log.SystemOutLogger` / `SystemOutLoggerFactory` pair but with a configurable destination stream.
 
 ```
 src/main/java/org/lattejava/web/log/
-  WebStdoutLogger.java         extends BaseLogger
-  WebStdoutLoggerFactory.java  implements LoggerFactory
+  WebPrintStreamLogger.java         extends BaseLogger
+  WebPrintStreamLoggerFactory.java  implements LoggerFactory
 ```
 
-### `WebStdoutLogger`
+### `WebPrintStreamLogger`
 
-- `handleMessage(String)` writes to `System.out.println(message)` (same as `SystemOutLogger`).
-- `timestamp()` overrides `BaseLogger.timestamp()` to return:
+Takes a `PrintStream` at construction. Two constructors:
 
-  ```java
-  OffsetDateTime.now()
-                .truncatedTo(ChronoUnit.MILLIS)
-                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME) + " "
-  ```
+- `WebPrintStreamLogger()` — defaults the stream to `System.out`.
+- `WebPrintStreamLogger(PrintStream out)` — uses the supplied stream. Rejects `null` with `NullPointerException`.
 
-  Produces e.g. `2026-04-27T13:45:23.689-04:00 `. Uses the system default zone implicitly via `OffsetDateTime.now()`.
+Behavior:
 
+- `handleMessage(String)` writes to `out.println(message)`.
+- `timestamp()` overrides `BaseLogger.timestamp()` to return an ISO-8601 offset date-time formatted with exactly three fractional digits (e.g. `2026-04-27T13:45:23.689-04:00 `). Built from a static `DateTimeFormatterBuilder` so the trailing zeros aren't trimmed (`ISO_OFFSET_DATE_TIME` would emit `.6` for `.600 ms`).
 - All level filtering, `{}` substitution, and throwable formatting come from `BaseLogger` unchanged.
 
-### `WebStdoutLoggerFactory`
+### `WebPrintStreamLoggerFactory`
 
-Mirrors `SystemOutLoggerFactory`:
+Two constructors plus a static singleton for the default case:
 
-- `public static final WebStdoutLoggerFactory FACTORY = new WebStdoutLoggerFactory();`
-- Holds a single `WebStdoutLogger` instance.
-- `getLogger(Class<?>)` returns the singleton.
+- `WebPrintStreamLoggerFactory()` — defaults the stream to `System.out`.
+- `WebPrintStreamLoggerFactory(PrintStream out)` — uses the supplied stream.
+- `public static final WebPrintStreamLoggerFactory FACTORY = new WebPrintStreamLoggerFactory();` — the no-arg singleton, used by `Web` when no factory is configured.
+- Holds a single `WebPrintStreamLogger` instance constructed once with the chosen stream; `getLogger(Class<?>)` returns it.
+
+### Why `PrintStream` is on the API
+
+Tests can inject a `PrintStream` wrapping a `ByteArrayOutputStream` and assert against captured bytes without redirecting `System.out` (which is process-global state and forces `@BeforeMethod`/`@AfterMethod` plumbing). It also lets applications direct framework output to a non-stdout sink (file, syslog wrapper) without subclassing.
 
 ## Startup message
 
@@ -101,7 +104,7 @@ public Web start(HTTPListenerConfiguration listener) {
   }
   Objects.requireNonNull(listener, "listener cannot be null");
 
-  LoggerFactory factory = loggerFactory != null ? loggerFactory : WebStdoutLoggerFactory.FACTORY;
+  LoggerFactory factory = loggerFactory != null ? loggerFactory : WebPrintStreamLoggerFactory.FACTORY;
   Logger log = factory.getLogger(Web.class);
   if (logLevel != null) {
     log.setLevel(logLevel);
@@ -157,16 +160,22 @@ All new files follow the project rules in `.claude/rules/`:
 
 ## Testing (TestNG)
 
-### `WebStdoutLoggerTest`
+### `WebPrintStreamLoggerTest`
 
-- Capture `System.out`, log an info message, assert the line matches `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2} <msg>$`.
+Tests inject a `PrintStream` wrapping a `ByteArrayOutputStream`. No `System.out` redirection.
+
+- Default constructor produces a logger that writes to `System.out` (smoke check: `new WebPrintStreamLogger()` instantiates without throwing).
+- Constructor with a `null` stream throws `NullPointerException`.
+- Logging an info message emits a line matching `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2} <msg>$` to the supplied stream.
 - Set level to `Error`, call `info(...)`, assert nothing is written.
 - Log with `{}` substitution, assert the value appears in place.
 - Log with a throwable, assert the stack trace follows the message.
 
-### `WebStdoutLoggerFactoryTest`
+### `WebPrintStreamLoggerFactoryTest`
 
-- `FACTORY.getLogger(A.class) == FACTORY.getLogger(B.class)` (singleton).
+- Default `FACTORY.getLogger(A.class) == FACTORY.getLogger(B.class)` (singleton).
+- Default factory's logger writes to `System.out` (verified indirectly: same instance returned across calls; type is `WebPrintStreamLogger`).
+- A factory built with a custom `PrintStream` produces a logger that writes to that stream (route an info message through `factory.getLogger(...)`, assert captured bytes).
 
 ### `WebTest` extensions
 
