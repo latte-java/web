@@ -71,7 +71,7 @@ public class CallbackHandler implements Handler {
 
     // Always verify the id_token signature (OIDC spec requires it).
     try {
-      new JWTDecoder().decode(idToken, jwks);
+      JWT.decode(idToken, jwks);
     } catch (Exception e) {
       redirectError(res, "invalid_id_token", "Invalid ID token");
       return;
@@ -80,7 +80,7 @@ public class CallbackHandler implements Handler {
     // When validateAccessToken=true, verify the access-token JWT too.
     if (config.validateAccessToken()) {
       try {
-        new JWTDecoder().decode(idToken, jwks);
+        JWT.decode(idToken, jwks);
       } catch (Exception e) {
         redirectError(res, "invalid_access_token", "Invalid access token");
         return;
