@@ -49,6 +49,28 @@
     <orderEntry type="module-library">
       <library>
         <CLASSES>
+          <root url="jar://$USER_HOME$/.m2/repository/gg/jte/jte/3.2.1/jte-3.2.1.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$USER_HOME$/.m2/repository/gg/jte/jte/3.2.1/jte-3.2.1-sources.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://$USER_HOME$/.m2/repository/gg/jte/jte-runtime/3.2.1/jte-runtime-3.2.1.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$USER_HOME$/.m2/repository/gg/jte/jte-runtime/3.2.1/jte-runtime-3.2.1-sources.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
           <root url="jar://$USER_HOME$/.cache/latte/org/lattejava/http/0.1.4/http-0.1.4.jar!/" />
         </CLASSES>
         <JAVADOC />
@@ -109,6 +131,17 @@
         <JAVADOC />
         <SOURCES>
           <root url="jar://$USER_HOME$/.m2/repository/org/webjars/jquery/3.7.1/jquery-3.7.1-sources.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library" scope="RUNTIME">
+      <library>
+        <CLASSES>
+          <root url="jar://$USER_HOME$/.m2/repository/gg/jte/jte-extension-api/3.2.1/jte-extension-api-3.2.1.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$USER_HOME$/.m2/repository/gg/jte/jte-extension-api/3.2.1/jte-extension-api-3.2.1-sources.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>
