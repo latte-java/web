@@ -11,7 +11,8 @@ import module java.base;
 import module org.lattejava.http;
 
 /**
- * Renders <a href="https://jte.gg/">JTE</a> templates and writes the result to the HTTP response.
+ * Renders <a href="https://jte.gg/">JTE</a> templates, either by writing the result to the HTTP response or by
+ * returning it as a {@link String}.
  * <p>
  * Each {@code html} method resolves a template, evaluates it with the supplied parameters, and writes the rendered HTML
  * to the response. The template name can be supplied explicitly or derived from the request path:
@@ -21,6 +22,10 @@ import module org.lattejava.http;
  *   <li>{@code /foo/} resolves to {@code foo/index.jte}</li>
  *   <li>{@code /foo/bar} resolves to {@code foo/bar.jte}</li>
  * </ul>
+ * Each {@code render} method resolves a template by name, evaluates it with the supplied parameters, and returns the
+ * rendered output as a {@link String}. Use {@code render} for non-HTTP rendering scenarios such as composing email
+ * bodies or building reusable fragments.
+ * <p>
  * When a single non-{@link Map} {@code model} is supplied, it is bound to the template parameter named {@code model}.
  * When a {@link Map} is supplied, its entries are bound to template parameters named using the map key.
  * <p>
@@ -30,10 +35,11 @@ import module org.lattejava.http;
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("unused")
 public class JTETemplates {
+  private static final Path DEFAULT_CLASSES_DIR = Paths.get("build/jte-classes");
   private static final String DEFAULT_MODEL_NAME = "model";
   private static final Path DEFAULT_TEMPLATE_DIR = Paths.get("web/templates");
-  private static final Path DEFAULT_CLASSES_DIR = Paths.get("build/jte-classes");
   private final TemplateEngine engine;
 
   /**
@@ -96,7 +102,7 @@ public class JTETemplates {
    * @param res The response to write the rendered HTML to.
    */
   public void html(HTTPRequest req, HTTPResponse res) throws IOException {
-    render(deriveTemplateName(req), req, res, Map.of());
+    renderToResponse(deriveTemplateName(req), req, res, Map.of());
   }
 
   /**
@@ -111,7 +117,7 @@ public class JTETemplates {
    * @param model The model to bind.
    */
   public void html(HTTPRequest req, HTTPResponse res, Object model) throws IOException {
-    render(deriveTemplateName(req), req, res, Map.of(DEFAULT_MODEL_NAME, model));
+    renderToResponse(deriveTemplateName(req), req, res, Map.of(DEFAULT_MODEL_NAME, model));
   }
 
   /**
@@ -125,7 +131,7 @@ public class JTETemplates {
    * @param models The map of models to bind.
    */
   public void html(HTTPRequest req, HTTPResponse res, Map<String, Object> models) throws IOException {
-    render(deriveTemplateName(req), req, res, models);
+    renderToResponse(deriveTemplateName(req), req, res, models);
   }
 
   /**
@@ -140,7 +146,7 @@ public class JTETemplates {
    * @param models The map of template parameter names to values.
    */
   public void html(String name, HTTPRequest req, HTTPResponse res, Map<String, Object> models) throws IOException {
-    render(name, req, res, models);
+    renderToResponse(name, req, res, models);
   }
 
   /**
@@ -155,10 +161,46 @@ public class JTETemplates {
    * @param model The model to bind to the {@code model} parameter.
    */
   public void html(String name, HTTPRequest req, HTTPResponse res, Object model) throws IOException {
-    render(name, req, res, Map.of(DEFAULT_MODEL_NAME, model));
+    renderToResponse(name, req, res, Map.of(DEFAULT_MODEL_NAME, model));
   }
 
-  private void render(String name, HTTPRequest req, HTTPResponse res, Map<String, Object> params) throws IOException {
+  /**
+   * Renders the named template with no parameters and returns the result as a {@link String}.
+   *
+   * @param name The template name (e.g., {@code page.jte}).
+   * @return The rendered template output.
+   */
+  public String render(String name) {
+    return render(name, Map.of());
+  }
+
+  /**
+   * Renders the named template with the given parameter map and returns the result as a {@link String}. Map entries are
+   * bound to template parameters using the map keys as the names.
+   *
+   * @param name   The template name (e.g., {@code page.jte}).
+   * @param models The map of template parameter names to values.
+   * @return The rendered template output.
+   */
+  public String render(String name, Map<String, Object> models) {
+    StringOutput output = new StringOutput();
+    engine.render(name, models, output);
+    return output.toString();
+  }
+
+  /**
+   * Renders the named template with the given model and returns the result as a {@link String}. The model is bound to a
+   * template parameter named {@code model}.
+   *
+   * @param name  The template name (e.g., {@code page.jte}).
+   * @param model The model to bind to the {@code model} parameter.
+   * @return The rendered template output.
+   */
+  public String render(String name, Object model) {
+    return render(name, Map.of(DEFAULT_MODEL_NAME, model));
+  }
+
+  private void renderToResponse(String name, HTTPRequest req, HTTPResponse res, Map<String, Object> params) throws IOException {
     Map<String, Object> merged = new LinkedHashMap<>(params);
     merged.put("request", req);
     merged.put("response", res);

@@ -76,6 +76,35 @@ public class JTETemplatesTest extends BaseWebTest {
   }
 
   @Test
+  public void render_multipleModels() {
+    var templates = new JTETemplates(Paths.get("src/test/jte"));
+    var model1 = new Model("One");
+    var model2 = new Model("Two");
+    String result = templates.render("named-template.jte",
+        Map.of(
+            "model1", model1,
+            "model2", model2
+        )
+    );
+    assertEquals(result, "Template model1=One model2=Two");
+  }
+
+  @Test
+  public void render_noModel() {
+    var templates = new JTETemplates(Paths.get("src/test/jte"));
+    String result = templates.render("index.jte");
+    assertEquals(result, "Template");
+  }
+
+  @Test
+  public void render_singleModel() {
+    var templates = new JTETemplates(Paths.get("src/test/jte"));
+    var model = new Model("Test");
+    String result = templates.render("named-template.jte", model);
+    assertEquals(result, "Template with model=Test");
+  }
+
+  @Test
   public void singleModel() throws Exception {
     try (var web = new Web()) {
       var templates = new JTETemplates(Paths.get("src/test/jte"));
