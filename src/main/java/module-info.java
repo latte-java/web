@@ -13,4 +13,5 @@ module org.lattejava.web {
   exports org.lattejava.web.middleware;
   exports org.lattejava.web.oidc;
   exports org.lattejava.web.oidc.internal;
+  exports org.lattejava.web.test;
 }
