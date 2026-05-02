@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2025-2026, Latte Java, All Rights Reserved
+ *
+ * Licensed under the MIT License. See LICENSE for details.
+ */
 package org.lattejava.web.oidc.internal;
 
 import module com.fasterxml.jackson.databind;

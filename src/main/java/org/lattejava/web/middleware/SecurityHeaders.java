@@ -62,34 +62,42 @@ public class SecurityHeaders implements Middleware {
 
   @Override
   public void handle(HTTPRequest req, HTTPResponse res, MiddlewareChain chain) throws Exception {
-    if (strictTransportSecurity != null) {
+    if (strictTransportSecurity != null && res.getHeader("Strict-Transport-Security") == null) {
       res.setHeader("Strict-Transport-Security", strictTransportSecurity);
     }
-    if (contentSecurityPolicy != null) {
-      res.setHeader("Content-Security-Policy", contentSecurityPolicy);
+    if (contentSecurityPolicy != null && res.getHeader("Content-Security-Policy") == null) {
+      String host = req.getHost();
+      String csp = contentSecurityPolicy;
+      if (host.equalsIgnoreCase("localhost") || host.equalsIgnoreCase("127.0.0.1")) {
+        csp = csp.replaceAll(
+            "(?:\\bupgrade-insecure-requests\\s*;\\s*|\\s*;\\s*\\bupgrade-insecure-requests\\b\\s*$|^\\s*upgrade-insecure-requests\\s*$)",
+            "").trim();
+      }
+
+      res.setHeader("Content-Security-Policy", csp);
     }
-    if (xContentTypeOptions != null) {
+    if (xContentTypeOptions != null && res.getHeader("X-Content-Type-Options") == null) {
       res.setHeader("X-Content-Type-Options", xContentTypeOptions);
     }
-    if (xFrameOptions != null) {
+    if (xFrameOptions != null && res.getHeader("X-Frame-Options") == null) {
       res.setHeader("X-Frame-Options", xFrameOptions);
     }
-    if (xXSSProtection != null) {
+    if (xXSSProtection != null && res.getHeader("X-XSS-Protection") == null) {
       res.setHeader("X-XSS-Protection", xXSSProtection);
     }
-    if (referrerPolicy != null) {
+    if (referrerPolicy != null && res.getHeader("Referrer-Policy") == null) {
       res.setHeader("Referrer-Policy", referrerPolicy);
     }
-    if (permissionsPolicy != null) {
+    if (permissionsPolicy != null && res.getHeader("Permissions-Policy") == null) {
       res.setHeader("Permissions-Policy", permissionsPolicy);
     }
-    if (crossOriginOpenerPolicy != null) {
+    if (crossOriginOpenerPolicy != null && res.getHeader("Cross-Origin-Opener-Policy") == null) {
       res.setHeader("Cross-Origin-Opener-Policy", crossOriginOpenerPolicy);
     }
-    if (crossOriginEmbedderPolicy != null) {
+    if (crossOriginEmbedderPolicy != null && res.getHeader("Cross-Origin-Embedder-Policy") == null) {
       res.setHeader("Cross-Origin-Embedder-Policy", crossOriginEmbedderPolicy);
     }
-    if (crossOriginResourcePolicy != null) {
+    if (crossOriginResourcePolicy != null && res.getHeader("Cross-Origin-Resource-Policy") == null) {
       res.setHeader("Cross-Origin-Resource-Policy", crossOriginResourcePolicy);
     }
     chain.next(req, res);
@@ -100,7 +108,9 @@ public class SecurityHeaders implements Middleware {
    * any setter to override, or pass {@code null} to suppress that header entirely.
    */
   public static class Builder {
-    private String contentSecurityPolicy = "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests";
+    private String contentSecurityPolicy = "default-src 'self'; style-src 'self' https://fonts.googleapis.com; " +
+        "font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; " +
+        "form-action 'self'; upgrade-insecure-requests";
     private String crossOriginEmbedderPolicy = "require-corp";
     private String crossOriginOpenerPolicy = "same-origin";
     private String crossOriginResourcePolicy = "same-origin";

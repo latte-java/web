@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2025-2026, Latte Java, All Rights Reserved
+ *
+ * Licensed under the MIT License. See LICENSE for details.
+ */
 package org.lattejava.web.oidc.internal;
 
 import module java.base;
@@ -22,7 +27,7 @@ public class LogoutHandler implements Handler {
     URI logoutEndpoint = config.logoutEndpoint();
     if (logoutEndpoint == null) {
       Tools.clearAllCookies(res, config);
-      res.sendRedirect(config.postLogoutPage());
+      res.sendRedirect(config.postLogout());
       return;
     }
 

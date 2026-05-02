@@ -10,7 +10,7 @@ import module java.net.http;
 import module org.lattejava.http;
 
 public abstract class BaseWebTest {
-  public static final int PORT = 8080;
+  public static final int PORT = 8081;
 
   public static final String BASE_URL = "http://localhost:" + PORT;
 

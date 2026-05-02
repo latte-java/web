@@ -50,7 +50,7 @@ public class OIDCConfigTest {
     assertTrue(config.validateAccessToken());
     assertEquals(config.errorPage(), "/");
     assertEquals(config.postLoginPage(), "/");
-    assertEquals(config.postLogoutPage(), "/");
+    assertEquals(config.postLogout(), "/");
     assertEquals(config.callbackPath(), "/oidc/return");
     assertEquals(config.logoutPath(), "/logout");
     assertEquals(config.logoutReturnPath(), "/oidc/logout-return");

@@ -70,12 +70,12 @@
         "application": {
           "name": "app",
           "oauthConfiguration": {
-            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "authorizedRedirectURLs": ["http://localhost:8081/oidc/return"],
             "clientSecret": "#{standardAppSecret}",
             "consentMode": "NeverPrompt",
             "enabledGrants": ["authorization_code", "refresh_token"],
             "generateRefreshTokens": true,
-            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "logoutURL": "http://localhost:8081/oidc/logout-return",
             "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [
@@ -102,12 +102,12 @@
             "refreshTokenUsagePolicy": "OneTimeUse"
           },
           "oauthConfiguration": {
-            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "authorizedRedirectURLs": ["http://localhost:8081/oidc/return"],
             "clientSecret": "#{rotatingRefreshAppSecret}",
             "consentMode": "NeverPrompt",
             "enabledGrants": ["authorization_code", "refresh_token"],
             "generateRefreshTokens": true,
-            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "logoutURL": "http://localhost:8081/oidc/logout-return",
             "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [
@@ -130,12 +130,12 @@
             "idTokenPopulateId": "#{keycloakJWTPopulateLambdaId}"
           },
           "oauthConfiguration": {
-            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "authorizedRedirectURLs": ["http://localhost:8081/oidc/return"],
             "clientSecret": "#{keycloakAppSecret}",
             "consentMode": "NeverPrompt",
             "enabledGrants": ["authorization_code", "refresh_token"],
             "generateRefreshTokens": true,
-            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "logoutURL": "http://localhost:8081/oidc/logout-return",
             "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [
@@ -161,12 +161,12 @@
             "timeToLiveInSeconds": 1
           },
           "oauthConfiguration": {
-            "authorizedRedirectURLs": ["http://localhost:8080/oidc/return"],
+            "authorizedRedirectURLs": ["http://localhost:8081/oidc/return"],
             "clientSecret": "#{fastAppSecret}",
             "consentMode": "NeverPrompt",
             "enabledGrants": ["authorization_code", "refresh_token"],
             "generateRefreshTokens": true,
-            "logoutURL": "http://localhost:8080/oidc/logout-return",
+            "logoutURL": "http://localhost:8081/oidc/logout-return",
             "scopeHandlingPolicy": "Compatibility"
           },
           "roles": [

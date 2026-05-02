@@ -32,7 +32,7 @@ public record OIDCConfig(
     boolean validateAccessToken,
     String errorPage,
     String postLoginPage,
-    String postLogoutPage,
+    String postLogout,
     String loginPath,
     String callbackPath,
     String logoutPath,
@@ -82,7 +82,7 @@ public record OIDCConfig(
     private String logoutPath = "/logout";
     private String logoutReturnPath = "/oidc/logout-return";
     private String postLoginPage = "/";
-    private String postLogoutPage = "/";
+    private String postLogout = "/";
     private String refreshTokenCookieName = "refresh_token";
     private Duration refreshTokenMaxAge = Duration.ofDays(30);
     private String returnToCookieName = "oidc_return_to";
@@ -180,7 +180,7 @@ public record OIDCConfig(
 
       return new OIDCConfig(issuer, authorizeEndpoint, tokenEndpoint, userinfoEndpoint, jwksEndpoint,
           logoutEndpoint, clientId, clientSecret, scopes, roleExtractor,
-          validateAccessToken, errorPage, postLoginPage, postLogoutPage, loginPath, callbackPath, logoutPath,
+          validateAccessToken, errorPage, postLoginPage, postLogout, loginPath, callbackPath, logoutPath,
           logoutReturnPath, stateCookieName, accessTokenCookieName, refreshTokenCookieName,
           idTokenCookieName, returnToCookieName, refreshTokenMaxAge);
     }
@@ -245,8 +245,8 @@ public record OIDCConfig(
       return this;
     }
 
-    public Builder postLogoutPage(String value) {
-      this.postLogoutPage = value;
+    public Builder postLogout(String value) {
+      this.postLogout = value;
       return this;
     }
 

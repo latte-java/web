@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2025-2026, Latte Java, All Rights Reserved
+ *
+ * Licensed under the MIT License. See LICENSE for details.
+ */
 package org.lattejava.web.oidc.internal;
 
 import module org.lattejava.http;
@@ -18,6 +23,6 @@ public class LogoutReturnHandler implements Handler {
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) throws Exception {
     Tools.clearAllCookies(res, config);
-    res.sendRedirect(config.postLogoutPage());
+    res.sendRedirect(config.postLogout());
   }
 }
