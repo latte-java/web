@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Latte Java Web — a lightweight web framework built on the Latte Java HTTP server (`org.lattejava:http`). Early stage: core routing is implemented, middleware and body handling are still in design (see `design/initial-brainstorming.md`).
+Latte Java Web — a lightweight web framework built on the Latte Java HTTP server (`org.lattejava:http`). Early stage: core routing is implemented, middleware and body handling are still in design (see `docs/design/2026-04-09-initial-brainstorming.md`).
+
+## Documentation
+
+- `docs/design/` — all design documents and specs (filenames prefixed with `YYYY-MM-DD-` creation date)
+- `docs/implementation/` — all implementation plans (filenames prefixed with `YYYY-MM-DD-` creation date)
 
 ## Build System
 

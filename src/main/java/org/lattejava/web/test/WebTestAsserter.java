@@ -18,7 +18,7 @@ import module org.lattejava.http;
  *
  * @author Brian Pontarelli
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "UnusedReturnValue"})
 public class WebTestAsserter {
   private final HttpResponse<byte[]> response;
   private final WebTest tester;
@@ -67,6 +67,19 @@ public class WebTestAsserter {
   public WebTestAsserter assertHeader(String name, String expected) {
     String actual = response.headers().firstValue(name).orElse(null);
     Assertions.assertEquals(actual, expected, "Header [" + name + "] does not match");
+    return this;
+  }
+
+  /**
+   * Asserts that the response is a redirect with the given status code and {@code Location} header.
+   *
+   * @param expectedStatus   The expected status code.
+   * @param expectedLocation The expected {@code Location} header value.
+   * @return This asserter for chaining.
+   */
+  public WebTestAsserter assertRedirect(int expectedStatus, String expectedLocation) {
+    assertStatus(expectedStatus);
+    assertHeader("Location", expectedLocation);
     return this;
   }
 
