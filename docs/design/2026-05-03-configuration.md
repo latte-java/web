@@ -11,15 +11,21 @@ Applications need a way to store configuration, both insecure and secure values,
 Configuration values are name value pairs. These values loaded using a multi-step process that stops once it finds the first definition of a value. Given a configuration named `my-app.some-setting`, the steps are as follows:
 
 1. See if there is an environment variable with the name `my-app.some-setting`
-2. See if there is an environment variable with the name `MY_APP_SOME_SETTING` (replacing all non-alpha characters with underscores so that it matches *nix standard naming for environment variables)
+2. See if there is an environment variable with the name `MY_APP_SOME_SETTING` (replacing all non-alphanumeric characters with underscores so that it matches *nix standard naming for environment variables)
 3. See if there is a Java system property with the name `my-app.some-setting` (i.e. `-Dmy-app.some-setting=value`)
 4. See if there is a configuration value in a properties file provided to the `Configuration` object in the constructor (i.e. `my-app.some-setting=value` or `my-app.some-setting: value`)
 
-If the lookup fails, an empty optional is returned. The syntax looks like this:
+The syntax looks like this to handle required settings in the constructor, and various retrieval methods with and without default values:
 
 ```java
-var config = new Configuration(Path.of("config.properties")); // No required settings
-var config = new Configuration(
+var config = new Configuration(); // No required settings and no config file, just env vars and system properties
+var config = new Configuration( // No config file, just env vars and system properties
+    List.of("my-app.some-required-setting", "my-app.some-other-required-setting") // Required settings
+);
+var config = new Configuration( // No required settings and a config file
+    Path.of("config.properties")
+);
+var config = new Configuration( // Config file and required settings
     Path.of("config.properties"),
     List.of("my-app.some-required-setting", "my-app.some-other-required-setting") // Required settings
 );
@@ -36,3 +42,5 @@ var value = config.getInteger("my-app.some-setting", 42); // Returns int or <def
 var value = config.getBigDecimal("my-app.some-setting", BigDecimal.valueOf(42)); // Returns BigDecimal or <default> if not found
 var value = config.getBigInteger("my-app.some-setting", BigInteger.valueOf(42)); // Returns BigInteger or <default> if not found
 ```
+
+The constructor will throw an exception if any required settings are not found. 
