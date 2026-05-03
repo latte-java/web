@@ -17,6 +17,7 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 public class AuthenticatedTest extends BaseWebTest {
+  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
   private static OIDC<String> oidc;
 
   @BeforeClass
@@ -51,7 +52,7 @@ public class AuthenticatedTest extends BaseWebTest {
 
   @Test
   public void validAccessToken_callsHandler_withTranslatedUser() throws Exception {
-    String accessToken = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
 
     try (var web = new Web()) {
       web.install(oidc);
@@ -69,10 +70,12 @@ public class AuthenticatedTest extends BaseWebTest {
                                    .header("Cookie", "access_token=" + accessToken)
                                    .GET()
                                    .build();
-      HttpResponse<String> res = HttpClient.newHttpClient().send(req, HttpResponse.BodyHandlers.ofString());
+      try (var client = HttpClient.newHttpClient()) {
+        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
 
-      assertEquals(res.statusCode(), 200);
-      assertEquals(res.body(), STANDARD_USER_ID);
+        assertEquals(res.statusCode(), 200);
+        assertEquals(res.body(), STANDARD_USER_ID);
+      }
     }
   }
 }

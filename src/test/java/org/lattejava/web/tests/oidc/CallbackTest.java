@@ -17,6 +17,7 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 public class CallbackTest extends BaseWebTest {
+  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
   private static final int MOCK_PORT = 9099;
 
   private static OIDC<?> oidc;
@@ -115,7 +116,7 @@ public class CallbackTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      var auth = fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
+      var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
 
       HttpResponse<String> res = get("/oidc/return?code=" + auth.code() + "&state=" + auth.state(),
           "oidc_state=" + auth.state() + "; oidc_return_to=" + BASE_URL + "/dashboard");
@@ -130,7 +131,7 @@ public class CallbackTest extends BaseWebTest {
       web.install(oidc);
       web.start(PORT);
 
-      var auth = fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
+      var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
 
       HttpResponse<String> res = get("/oidc/return?code=" + auth.code() + "&state=" + auth.state(),
           "oidc_state=" + auth.state());

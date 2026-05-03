@@ -17,6 +17,7 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 public class RefreshTest extends BaseWebTest {
+  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
   private static final int MOCK_PORT = 9099;
 
   private static OIDC<?> fastOIDC;
@@ -52,7 +53,7 @@ public class RefreshTest extends BaseWebTest {
 
   @Test
   public void expiredAccessToken_validRefreshToken_refreshSucceeds_andSetsNewAccessTokenCookie() throws Exception {
-    Tokens tokens = login(USER_EMAIL, DEFAULT_PASSWORD, FAST_APP_ID);
+    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, FAST_APP_ID);
     assertNotNull(tokens.refreshToken(), "fast app should issue a refresh token");
     Thread.sleep(2000);
 
@@ -111,7 +112,7 @@ public class RefreshTest extends BaseWebTest {
 
   @Test
   public void rotationEnabled_refreshIssuesNewRefreshTokenCookie_withRefreshTokenMaxAge() throws Exception {
-    Tokens tokens = login(USER_EMAIL, DEFAULT_PASSWORD, ROTATING_APP_ID);
+    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, ROTATING_APP_ID);
     assertNotNull(tokens.refreshToken());
 
     try (var web = new Web()) {
@@ -135,7 +136,7 @@ public class RefreshTest extends BaseWebTest {
 
   @Test
   public void successfulRefresh_setsNewIdTokenCookie() throws Exception {
-    Tokens tokens = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
     assertNotNull(tokens.idToken());
 
     try (var web = new Web()) {

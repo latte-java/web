@@ -15,6 +15,7 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 public class UserinfoValidationTest extends BaseWebTest {
+  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
   private static final int MOCK_PORT = 9099;
 
   private static OIDC<?> userinfoOIDC;
@@ -73,7 +74,7 @@ public class UserinfoValidationTest extends BaseWebTest {
 
   @Test
   public void userinfoMode_validAccessToken_passesThroughToHandler() throws Exception {
-    String accessToken = login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
 
     try (var web = new Web()) {
       web.install(userinfoOIDC);
