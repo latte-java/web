@@ -12,11 +12,11 @@ import org.lattejava.web.tests.*;
 
 /**
  * FusionAuth-specific extension of {@link OIDCTestFixture} for tests that drive the kickstart-provisioned FusionAuth
- * instance at {@code localhost:9011}. Carries the constants for that instance (app IDs, secrets, the canned
+ * instance at {@code localhost:9010}. Carries the constants for that instance (app IDs, secrets, the canned
  * admin/user credentials) and overrides {@link #clientSecretFor(String)} so a single fixture can log in to any of
  * the four kickstart-provisioned applications by ID.
  * <p>
- * Mirrors {@code src/test/docker/kickstart/kickstart.json}.
+ * Mirrors {@code src/test/fusionauth/kickstart/kickstart.json}.
  */
 public class FusionAuthFixture extends OIDCTestFixture {
   public static final String ADMIN_EMAIL = "admin@example.com";
@@ -24,7 +24,7 @@ public class FusionAuthFixture extends OIDCTestFixture {
   public static final String DEFAULT_PASSWORD = "password";
   public static final String FAST_APP_ID = "20000000-0000-0000-0000-000000000002";
   public static final String FAST_APP_SECRET = "fast-app-secret-1234567890abcdef01234";
-  public static final String FA_BASE_URL = "http://localhost:9011";
+  public static final String FA_BASE_URL = "http://localhost:9010";
   public static final String KEYCLOAK_APP_ID = "10000000-0000-0000-0000-000000000004";
   public static final String KEYCLOAK_APP_SECRET = "keycloak-app-secret-1234567890abcdef0";
   public static final String ROTATING_APP_ID = "10000000-0000-0000-0000-000000000003";

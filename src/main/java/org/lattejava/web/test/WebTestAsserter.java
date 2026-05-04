@@ -53,6 +53,7 @@ public class WebTestAsserter {
   public WebTestAsserter assertCookie(String name, String value) {
     Cookie cookie = tester.cookies.get(name);
     String actual = cookie == null ? null : cookie.value;
+    Objects.requireNonNull(value, "[value] cannot be null");
     Assertions.assertEquals(actual, value, "Cookie [" + name + "] does not match");
     return this;
   }
@@ -66,7 +67,23 @@ public class WebTestAsserter {
    */
   public WebTestAsserter assertHeader(String name, String expected) {
     String actual = response.headers().firstValue(name).orElse(null);
+    Objects.requireNonNull(expected, "[expected] cannot be null");
     Assertions.assertEquals(actual, expected, "Header [" + name + "] does not match");
+    return this;
+  }
+
+  /**
+   * Asserts that the named response header starts with the given value (using the first value if the header is
+   * repeated).
+   *
+   * @param name     The header name.
+   * @param expected The expected value.
+   * @return This asserter for chaining.
+   */
+  public WebTestAsserter assertHeaderStartsWith(String name, String expected) {
+    String actual = response.headers().firstValue(name).orElse(null);
+    Objects.requireNonNull(expected, "[expected] cannot be null");
+    Assertions.assertTrue(actual != null && actual.startsWith(expected), "Header [" + name + "] does not start with [" + expected + "]. The full value is [" + actual + "]");
     return this;
   }
 
@@ -84,6 +101,17 @@ public class WebTestAsserter {
   }
 
   /**
+   * Asserts whatever the lambda wants.
+   *
+   * @param asserter The lambda.
+   * @return This asserter for chaining.
+   */
+  public WebTestAsserter assertResponse(Consumer<HttpResponse<byte[]>> asserter) {
+    asserter.accept(response);
+    return this;
+  }
+
+  /**
    * Asserts the response status code.
    *
    * @param expected The expected status.
@@ -92,15 +120,6 @@ public class WebTestAsserter {
   public WebTestAsserter assertStatus(int expected) {
     Assertions.assertEquals(response.statusCode(), expected, "Status code does not match");
     return this;
-  }
-
-  /**
-   * Returns the underlying response for direct access.
-   *
-   * @return The response.
-   */
-  public HttpResponse<byte[]> response() {
-    return response;
   }
 
   /**
@@ -127,5 +146,14 @@ public class WebTestAsserter {
       }
     }
     return tester;
+  }
+
+  /**
+   * Returns the underlying response for direct access.
+   *
+   * @return The response.
+   */
+  public HttpResponse<byte[]> response() {
+    return response;
   }
 }

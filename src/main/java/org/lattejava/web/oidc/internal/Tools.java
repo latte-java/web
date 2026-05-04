@@ -157,7 +157,7 @@ public class Tools {
 
   /**
    * Enforces that the URI uses HTTPS, except when the host is a loopback address. This makes local development with
-   * {@code http://localhost:9011} (etc.) workable without undermining production security posture.
+   * {@code http://localhost:9010} (etc.) workable without undermining production security posture.
    */
   public static void requireSecureURI(String field, URI uri) {
     if (uri == null) {
