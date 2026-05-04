@@ -17,8 +17,9 @@ import org.lattejava.web.oidc.internal.CallbackHandler;
  * <p>
  * Install the instance at the root with {@code web.install(oidc)} — it handles the callback, logout, and logout-return
  * paths by virtue of being a {@link Middleware} itself. Attach protection where needed via {@link #authenticated()},
- * {@link #hasAnyRole(String...)}, or {@link #hasAllRoles(String...)}, which are thin factories around the public
- * {@link Authenticated}, {@link HasAnyRole}, and {@link HasAllRoles} middlewares.
+ * {@link #jwtAuthenticated()}, {@link #hasAnyRole(String...)}, or {@link #hasAllRoles(String...)}, which are thin
+ * factories around the public {@link Authenticated}, {@link JWTAuthenticated}, {@link HasAnyRole}, and
+ * {@link HasAllRoles} middlewares.
  * <p>
  * Request-scoped access to the authenticated JWT is available via the static {@link #jwt()} / {@link #optionalJWT()}
  * and the instance-level {@link #user()} / {@link #optionalUser()}, which apply the configured translator.
@@ -144,6 +145,14 @@ public class OIDC<U> implements Middleware {
    */
   public HasAnyRole hasAnyRole(String... roles) {
     return new HasAnyRole(config, roles);
+  }
+
+  /**
+   * @return A new {@link JWTAuthenticated} middleware bound to this OpenIDConnect instance. Use this for API endpoints
+   * that share the session cookies with the browser but expect a 401 on failure instead of a login redirect.
+   */
+  public JWTAuthenticated jwtAuthenticated() {
+    return new JWTAuthenticated(config, jwks);
   }
 
   /**

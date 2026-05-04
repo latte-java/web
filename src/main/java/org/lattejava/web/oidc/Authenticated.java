@@ -20,12 +20,13 @@ import module org.lattejava.web;
  * userinfo endpoint; the userinfo response is wrapped as a {@link JWT} for ScopedValue binding.
  * <p>
  * On expired access token, the middleware attempts a refresh using the {@code refresh_token} cookie before falling back
- * to a login redirect.
+ * to {@link #unauthorized(HTTPRequest, HTTPResponse)}. Subclasses may override that hook to change the unauthenticated
+ * response (e.g. {@link JWTAuthenticated} returns 401 instead of redirecting).
  *
  * @author Brian Pontarelli
  */
 public class Authenticated implements Middleware {
-  private final OIDCConfig config;
+  protected final OIDCConfig config;
   private final TokenValidator tokenValidator;
 
   Authenticated(OIDCConfig config, JWKS jwks) {
@@ -38,11 +39,7 @@ public class Authenticated implements Middleware {
     // No token means the user isn't logged in
     String accessToken = Tools.readCookie(req, config.accessTokenCookieName());
     if (accessToken == null) {
-      // This assumes the id and refresh tokens are toast, but the returnTo cookie might still be used for the final
-      // redirect, so it is set here because this is the requested URL we should return to
-      Tools.clearAllAuthCookies(res, config);
-      Tools.addTransientCookie(req, res, config.returnToCookieName(), req.getBaseURL() + req.getPath());
-      res.sendRedirect(config.loginPath());
+      unauthorized(req, res);
       return;
     }
 
@@ -52,11 +49,7 @@ public class Authenticated implements Middleware {
     if (result instanceof TokenValidator.Result.Invalid) {
       JWT refreshed = attemptRefresh(req, res);
       if (refreshed == null) {
-        // This assumes the access, id, and refresh tokens are toast, but the returnTo cookie might still be used for
-        // the final redirect, so it is set here because this is the requested URL we should return to
-        Tools.clearAllAuthCookies(res, config);
-        Tools.addTransientCookie(req, res, config.returnToCookieName(), req.getBaseURL() + req.getPath());
-        res.sendRedirect(config.loginPath());
+        unauthorized(req, res);
         return;
       }
 
@@ -73,6 +66,24 @@ public class Authenticated implements Middleware {
       chain.next(req, res);
       return null;
     });
+  }
+
+  /**
+   * Handles a request that has no valid access token and could not be refreshed. The default implementation clears the
+   * auth cookies, captures the requested URL in the return-to cookie, and redirects to the configured login path.
+   * Subclasses may override this hook to change the response — for example, {@link JWTAuthenticated} sends a 401 for
+   * API clients that expect a status code rather than a redirect.
+   *
+   * @param req The current request.
+   * @param res The response to populate.
+   * @throws Exception If the response cannot be written.
+   */
+  protected void unauthorized(HTTPRequest req, HTTPResponse res) throws Exception {
+    // This assumes the access, id, and refresh tokens are toast, but the returnTo cookie might still be used for the
+    // final redirect, so it is set here because this is the requested URL we should return to
+    Tools.clearAllAuthCookies(res, config);
+    Tools.addTransientCookie(req, res, config.returnToCookieName(), req.getBaseURL() + req.getPath());
+    res.sendRedirect(config.loginPath());
   }
 
   private JWT attemptRefresh(HTTPRequest req, HTTPResponse res) {
