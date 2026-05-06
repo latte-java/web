@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2025-2026, Latte Java, All Rights Reserved
- *
- * Licensed under the MIT License. See LICENSE for details.
+ * Copyright (c) 2025-2026 Latte Java
+ * SPDX-License-Identifier: MIT
  */
 package org.lattejava.web;
 
@@ -15,7 +14,7 @@ import module java.base;
  *   <li>The environment variable whose name is the setting name uppercased with every non-alphanumeric character
  *       replaced by an underscore (so {@code my-app.some-setting} becomes {@code MY_APP_SOME_SETTING}).</li>
  *   <li>The Java system property with the same name as the setting.</li>
- *   <li>The optional properties file passed to the constructor.</li>
+ *   <li>Each properties file passed to the constructor, consulted in the order they were supplied.</li>
  * </ol>
  * <p>
  * If a setting is not defined in any source, the no-default getters return {@code null} and the default-value
@@ -25,13 +24,24 @@ import module java.base;
  * @author Brian Pontarelli
  */
 public class Configuration {
-  private final Properties fileProperties = new Properties();
+  private final List<Properties> fileProperties = new ArrayList<>();
 
   /**
    * Constructs a configuration backed only by environment variables and Java system properties.
    */
   public Configuration() {
-    this(null, List.of());
+    this(List.of());
+  }
+
+  /**
+   * Constructs a configuration backed by the given properties files in addition to environment variables and Java
+   * system properties. Files are consulted in the order they are supplied; the first file to define a setting wins.
+   *
+   * @param propertiesFiles The paths to properties files readable by {@link Properties#load(java.io.InputStream)}.
+   * @throws UncheckedIOException if any file cannot be read.
+   */
+  public Configuration(Path... propertiesFiles) {
+    this(List.of(), propertiesFiles);
   }
 
   /**
@@ -42,36 +52,28 @@ public class Configuration {
    * @throws IllegalStateException if any required setting is not defined.
    */
   public Configuration(List<String> requiredSettings) {
-    this(null, requiredSettings);
+    this(requiredSettings, new Path[0]);
   }
 
   /**
-   * Constructs a configuration backed by the given properties file in addition to environment variables and Java system
-   * properties.
+   * Constructs a configuration backed by the given properties files in addition to environment variables and Java
+   * system properties, validating that the given required settings are defined. Files are consulted in the order they
+   * are supplied; the first file to define a setting wins.
    *
-   * @param propertiesFile The path to a properties file readable by {@link Properties#load(java.io.InputStream)}.
-   * @throws UncheckedIOException if the file cannot be read.
-   */
-  public Configuration(Path propertiesFile) {
-    this(propertiesFile, List.of());
-  }
-
-  /**
-   * Constructs a configuration backed by the given properties file in addition to environment variables and Java system
-   * properties, validating that the given required settings are defined.
-   *
-   * @param propertiesFile   The path to a properties file readable by {@link Properties#load(java.io.InputStream)}.
    * @param requiredSettings The names of settings that must be defined in at least one source.
-   * @throws UncheckedIOException  if the file cannot be read.
+   * @param propertiesFiles  The paths to properties files readable by {@link Properties#load(java.io.InputStream)}.
+   * @throws UncheckedIOException  if any file cannot be read.
    * @throws IllegalStateException if any required setting is not defined.
    */
-  public Configuration(Path propertiesFile, List<String> requiredSettings) {
-    if (propertiesFile != null) {
+  public Configuration(List<String> requiredSettings, Path... propertiesFiles) {
+    for (Path propertiesFile : propertiesFiles) {
+      var props = new Properties();
       try (var in = Files.newInputStream(propertiesFile)) {
-        fileProperties.load(in);
+        props.load(in);
       } catch (IOException e) {
         throw new UncheckedIOException(e);
       }
+      fileProperties.add(props);
     }
     var missing = new ArrayList<String>();
     for (String name : requiredSettings) {
@@ -116,7 +118,13 @@ public class Configuration {
     if (value != null) {
       return value;
     }
-    return fileProperties.getProperty(name);
+    for (Properties props : fileProperties) {
+      value = props.getProperty(name);
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
   }
 
   /**

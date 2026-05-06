@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2025-2026, Latte Java, All Rights Reserved
- *
- * Licensed under the MIT License. See LICENSE for details.
+ * Copyright (c) 2025-2026 Latte Java
+ * SPDX-License-Identifier: MIT
  */
 package org.lattejava.web.tests;
 
@@ -20,7 +19,7 @@ public class ConfigurationTest {
     Path file = Files.createTempFile("config-test", ".properties");
     try {
       Files.writeString(file, "config-test.required.in-file=ok\n");
-      var config = new Configuration(file, List.of("config-test.required.in-file"));
+      var config = new Configuration(List.of("config-test.required.in-file"), file);
       assertEquals(config.get("config-test.required.in-file"), "ok");
     } finally {
       Files.deleteIfExists(file);
@@ -180,6 +179,37 @@ public class ConfigurationTest {
     assertNull(System.getenv("path"), "Test assumes [path] is not a separate env var (case-sensitive systems)");
     var config = new Configuration();
     assertEquals(config.get("path"), envValue);
+  }
+
+  @Test
+  public void getReadsFromMultipleFilesEarlierWins() throws Exception {
+    Path first = Files.createTempFile("config-test-first", ".properties");
+    Path second = Files.createTempFile("config-test-second", ".properties");
+    try {
+      Files.writeString(first, "config-test.multi.shared=from-first\n");
+      Files.writeString(second, "config-test.multi.shared=from-second\n");
+      var config = new Configuration(first, second);
+      assertEquals(config.get("config-test.multi.shared"), "from-first");
+    } finally {
+      Files.deleteIfExists(first);
+      Files.deleteIfExists(second);
+    }
+  }
+
+  @Test
+  public void getReadsFromMultipleFilesFallsThroughToLater() throws Exception {
+    Path first = Files.createTempFile("config-test-first", ".properties");
+    Path second = Files.createTempFile("config-test-second", ".properties");
+    try {
+      Files.writeString(first, "config-test.multi.only-first=from-first\n");
+      Files.writeString(second, "config-test.multi.only-second=from-second\n");
+      var config = new Configuration(first, second);
+      assertEquals(config.get("config-test.multi.only-first"), "from-first");
+      assertEquals(config.get("config-test.multi.only-second"), "from-second");
+    } finally {
+      Files.deleteIfExists(first);
+      Files.deleteIfExists(second);
+    }
   }
 
   @Test
