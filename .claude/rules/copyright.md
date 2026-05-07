@@ -12,7 +12,7 @@ Every Java file — including `module-info.java` — starts with the SPDX-tagged
 
 ```java
 /*
- * Copyright (c) <year> Latte Java
+ * Copyright (c) <year> The Latte Project
  * SPDX-License-Identifier: MIT
  */
 ```
@@ -30,23 +30,23 @@ The MIT license itself does not mandate any per-file header — the only hard re
 ## Copyright line format
 
 ```
-Copyright (c) <year> Latte Java
+Copyright (c) <year> The Latte Project
 ```
 
 - `(c)` lowercase in parens. Don't use `©` — keep it ASCII.
 - No comma between year and holder. (The canonical MIT text has no comma.)
-- Holder is always exactly `Latte Java`.
+- Holder is always exactly `The Latte Project`.
 
 ## Year handling
 
-- New file: single year — `Copyright (c) 2026 Latte Java`.
-- File modified in a later year than it was created: extend to a range — `Copyright (c) 2025-2026 Latte Java`. Bump the upper bound on substantive changes, not whitespace edits. Don't list years individually.
+- New file: single year — `Copyright (c) 2026 The Latte Project`.
+- File modified in a later year than it was created: extend to a range — `Copyright (c) 2025-2026 The Latte Project`. Bump the upper bound on substantive changes, not whitespace edits. Don't list years individually.
 
 ## Placement
 
 ```java
 /*
- * Copyright (c) 2026 Latte Java
+ * Copyright (c) 2026 The Latte Project
  * SPDX-License-Identifier: MIT
  */
 package org.lattejava.json;
@@ -63,6 +63,10 @@ public class Example {
 ```
 
 The file header is not the class Javadoc. They are distinct blocks separated by the `package` declaration and imports. `module-info.java` follows the same pattern — file header at the top, then the `module` declaration.
+
+## Upstream files
+
+Some files in this project might be copied from upstream projects. These files will have an Apache license header or the holder will be `FusionAuth` or `Inversoft`. You *MUST* preserve the copyright header in those files.
 
 ## Sources
 
