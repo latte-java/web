@@ -44,6 +44,16 @@ public class LifecycleTest extends BaseWebTest {
   }
 
   @Test
+  public void close_withShutdownTasks() {
+    var web = new Web();
+    AtomicBoolean shutdown = new AtomicBoolean(false);
+    web.addShutdownTask(() -> shutdown.set(true));
+    web.start(PORT);
+    web.close();
+    assertTrue(shutdown.get());
+  }
+
+  @Test
   public void prefix_afterStart_throws() {
     try (var web = new Web()) {
       web.start(PORT);

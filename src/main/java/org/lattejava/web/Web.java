@@ -9,7 +9,6 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 import org.lattejava.web.internal.*;
-import org.lattejava.web.log.WebPrintStreamLoggerFactory;
 
 /**
  * A lightweight web framework built on top of the Latte Java HTTP server.
@@ -21,6 +20,7 @@ public class Web implements AutoCloseable {
   private final boolean isChild;
   private final MiddlewareTrie middlewareTrie;
   private final String pathPrefix;
+  private final List<Runnable> shutdownTasks = new ArrayList<>();
   private final AtomicBoolean started;
   private final RouteTrie trie;
   private Path baseDir;
@@ -71,6 +71,18 @@ public class Web implements AutoCloseable {
       }
     }
     return true;
+  }
+
+  /**
+   * Adds a shutdown hook that runs the given task when the JVM shuts down.
+   *
+   * @param task The task to run.
+   * @return This Web instance for chaining.
+   */
+  public Web addShutdownTask(Runnable task) {
+    Objects.requireNonNull(task, "task must not be null");
+    shutdownTasks.add(task);
+    return this;
   }
 
   /**
@@ -473,6 +485,11 @@ public class Web implements AutoCloseable {
     if (toClose != null) {
       server = null;
       toClose.close();
+    }
+
+    // Run the shutdown tasks
+    for (Runnable shutdownTask : shutdownTasks) {
+      shutdownTask.run();
     }
   }
 
