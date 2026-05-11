@@ -10,24 +10,10 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 import module org.testng;
 
-import org.lattejava.web.tests.*;
-
 import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
-public class LoginRedirectTest extends BaseWebTest {
-  private static OIDC<?> oidc;
-
-  @BeforeClass
-  public static void setupOIDC() {
-    var config = OIDCConfig.builder()
-                           .issuer(STANDARD_ISSUER)
-                           .clientId(STANDARD_APP_ID)
-                           .clientSecret(STANDARD_APP_SECRET)
-                           .build();
-    oidc = OIDC.create(config);
-  }
-
+public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void authorizeURL_codeChallenge_matchesSHA256OfState() throws Exception {
     try (var web = new Web()) {
@@ -46,6 +32,47 @@ public class LoginRedirectTest extends BaseWebTest {
       byte[] digest = MessageDigest.getInstance("SHA-256").digest(state.getValue().getBytes(StandardCharsets.UTF_8));
       String expected = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
       assertEquals(challenge, expected);
+    }
+  }
+
+  @Test
+  public void loginPath_appendsIdpHintToAuthorizeURL_whenProvided() throws Exception {
+    try (var web = new Web()) {
+      web.install(oidc);
+      web.start(PORT);
+
+      HttpResponse<String> res = get("/login?idp_hint=11111111-2222-3333-4444-200000000001", null);
+      assertEquals(res.statusCode(), 302);
+
+      String location = res.headers().firstValue("Location").orElseThrow();
+      Map<String, String> params = parseQuery(URI.create(location).getRawQuery());
+      assertEquals(params.get("idp_hint"), "11111111-2222-3333-4444-200000000001");
+    }
+  }
+
+  @Test
+  public void loginPath_doesNotSetReturnToCookie_forAbsoluteURL() throws Exception {
+    try (var web = new Web()) {
+      web.install(oidc);
+      web.start(PORT);
+
+      String evil = URLEncoder.encode("https://evil.com/", StandardCharsets.UTF_8);
+      HttpResponse<String> res = get("/login?return_to=" + evil, null);
+      Cookie returnTo = getCookie(res, "oidc_return_to");
+      assertNull(returnTo, "Expected no oidc_return_to cookie for absolute URL");
+    }
+  }
+
+  @Test
+  public void loginPath_doesNotSetReturnToCookie_forProtocolRelativeURL() throws Exception {
+    try (var web = new Web()) {
+      web.install(oidc);
+      web.start(PORT);
+
+      String evil = URLEncoder.encode("//evil.com/path", StandardCharsets.UTF_8);
+      HttpResponse<String> res = get("/login?return_to=" + evil, null);
+      Cookie returnTo = getCookie(res, "oidc_return_to");
+      assertNull(returnTo, "Expected no oidc_return_to cookie for protocol-relative URL");
     }
   }
 
@@ -71,6 +98,20 @@ public class LoginRedirectTest extends BaseWebTest {
       assertEquals(params.get("code_challenge_method"), "S256");
       assertNotNull(params.get("state"));
       assertNotNull(params.get("code_challenge"));
+    }
+  }
+
+  @Test
+  public void loginPath_setsReturnToCookie_forSafeRelativePath() throws Exception {
+    try (var web = new Web()) {
+      web.install(oidc);
+      web.start(PORT);
+
+      String safe = URLEncoder.encode("/app/groups/foo/verify", StandardCharsets.UTF_8);
+      HttpResponse<String> res = get("/login?return_to=" + safe, null);
+      Cookie returnTo = getCookie(res, "oidc_return_to");
+      assertNotNull(returnTo, "Expected oidc_return_to cookie");
+      assertEquals(returnTo.getValue(), "/app/groups/foo/verify");
     }
   }
 

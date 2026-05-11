@@ -9,6 +9,8 @@ import module org.lattejava.web;
 
 import org.lattejava.web.tests.*;
 
+import static org.testng.Assert.fail;
+
 /**
  * FusionAuth-specific extension of {@link OIDCTestFixture} for tests that drive the kickstart-provisioned FusionAuth
  * instance at {@code localhost:9010}. Carries the constants for that instance (app IDs, secrets, the canned
@@ -62,11 +64,17 @@ public class FusionAuthFixture extends OIDCTestFixture {
   }
 
   private static OIDCConfig defaultConfig() {
-    return OIDCConfig.builder()
-                     .issuer(STANDARD_ISSUER)
-                     .clientId(STANDARD_APP_ID)
-                     .clientSecret(STANDARD_APP_SECRET)
-                     .build();
+    try {
+      return OIDCConfig.builder()
+                       .issuer(STANDARD_ISSUER)
+                       .clientId(STANDARD_APP_ID)
+                       .clientSecret(STANDARD_APP_SECRET)
+                       .build();
+    } catch (Exception e) {
+      System.out.println("Unable to construct the OIDC configuration and the OIDC instance. This is likely due to FusionAuth not running.");
+      fail("Unable to construct the OIDC configuration and the OIDC instance. This is likely due to FusionAuth not running.", e);
+      return null;
+    }
   }
 
   /**

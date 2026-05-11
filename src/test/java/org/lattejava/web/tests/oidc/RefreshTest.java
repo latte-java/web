@@ -10,18 +10,14 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 import module org.testng;
 
-import org.lattejava.web.tests.*;
-
 import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
-public class RefreshTest extends BaseWebTest {
-  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
+public class RefreshTest extends BaseOIDCTest {
   private static final int MOCK_PORT = 9099;
 
   private static OIDC<?> fastOIDC;
   private static OIDC<?> rotatingOIDC;
-  private static OIDC<?> standardOIDC;
 
   @BeforeClass
   public static void setupOIDC() {
@@ -34,11 +30,6 @@ public class RefreshTest extends BaseWebTest {
                                          .issuer(STANDARD_ISSUER)
                                          .clientId(ROTATING_APP_ID)
                                          .clientSecret(ROTATING_APP_SECRET)
-                                         .build());
-    standardOIDC = OIDC.create(OIDCConfig.builder()
-                                         .issuer(STANDARD_ISSUER)
-                                         .clientId(STANDARD_APP_ID)
-                                         .clientSecret(STANDARD_APP_SECRET)
                                          .build());
   }
 
@@ -76,9 +67,9 @@ public class RefreshTest extends BaseWebTest {
   @Test
   public void invalidAccessToken_invalidRefreshToken_clearsAuthCookies_redirectsToLogin() throws Exception {
     try (var web = new Web()) {
-      web.install(standardOIDC);
+      web.install(oidc);
       web.prefix("/protected", p -> {
-        p.install(standardOIDC.authenticated());
+        p.install(oidc.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -97,9 +88,9 @@ public class RefreshTest extends BaseWebTest {
   @Test
   public void invalidAccessToken_noRefreshTokenCookie_clearsAuthCookies_redirectsToLogin() throws Exception {
     try (var web = new Web()) {
-      web.install(standardOIDC);
+      web.install(oidc);
       web.prefix("/protected", p -> {
-        p.install(standardOIDC.authenticated());
+        p.install(oidc.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -139,9 +130,9 @@ public class RefreshTest extends BaseWebTest {
     assertNotNull(tokens.idToken());
 
     try (var web = new Web()) {
-      web.install(standardOIDC);
+      web.install(oidc);
       web.prefix("/protected", p -> {
-        p.install(standardOIDC.authenticated());
+        p.install(oidc.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);

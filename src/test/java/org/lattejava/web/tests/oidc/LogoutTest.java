@@ -10,27 +10,14 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 import module org.testng;
 
-import org.lattejava.web.tests.*;
-
 import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
-public class LogoutTest extends BaseWebTest {
-  private static OIDC<?> standardOIDC;
-
-  @BeforeClass
-  public static void setupOIDC() {
-    standardOIDC = OIDC.create(OIDCConfig.builder()
-                                         .issuer(STANDARD_ISSUER)
-                                         .clientId(STANDARD_APP_ID)
-                                         .clientSecret(STANDARD_APP_SECRET)
-                                         .build());
-  }
-
+public class LogoutTest extends BaseOIDCTest {
   @Test
   public void logoutPath_withLogoutEndpoint_butNoIdTokenCookie_omitsIdTokenHint() throws Exception {
     try (var web = new Web()) {
-      web.install(standardOIDC);
+      web.install(oidc);
       web.start(PORT);
 
       HttpResponse<String> res = get("/logout", null);
@@ -47,7 +34,7 @@ public class LogoutTest extends BaseWebTest {
   @Test
   public void logoutPath_withLogoutEndpoint_redirectsToIdP_withAllParams() throws Exception {
     try (var web = new Web()) {
-      web.install(standardOIDC);
+      web.install(oidc);
       web.start(PORT);
 
       HttpResponse<String> res = get("/logout", "id_token=opaque-id-token");
@@ -95,7 +82,7 @@ public class LogoutTest extends BaseWebTest {
   @Test
   public void logoutReturnPath_clearsAllCookies_andRedirectsToPostLogoutPage() throws Exception {
     try (var web = new Web()) {
-      web.install(standardOIDC);
+      web.install(oidc);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/logout-return", "access_token=a; id_token=i; refresh_token=r; oidc_state=s; oidc_return_to=here");
@@ -113,7 +100,7 @@ public class LogoutTest extends BaseWebTest {
   @Test
   public void logoutReturnPath_hitDirectlyWithoutCookies_succeeds() throws Exception {
     try (var web = new Web()) {
-      web.install(standardOIDC);
+      web.install(oidc);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/logout-return", null);

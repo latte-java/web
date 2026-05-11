@@ -8,25 +8,10 @@ import module java.base;
 import module org.lattejava.web;
 import module org.testng;
 
-import org.lattejava.web.tests.*;
-
 import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
-public class RolesTest extends BaseWebTest {
-  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
-  private static OIDC<?> oidc;
-
-  @BeforeClass
-  public static void setupOIDC() {
-    var config = OIDCConfig.builder()
-                           .issuer(STANDARD_ISSUER)
-                           .clientId(STANDARD_APP_ID)
-                           .clientSecret(STANDARD_APP_SECRET)
-                           .build();
-    oidc = OIDC.create(config);
-  }
-
+public class RolesTest extends BaseOIDCTest {
   @Test
   public void customRoleExtractor_resolvesNestedRealmAccessRoles_forKeycloakApp() throws Exception {
     var config = OIDCConfig.builder()

@@ -10,26 +10,11 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 import module org.testng;
 
-import org.lattejava.web.tests.*;
-
 import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
-public class CallbackTest extends BaseWebTest {
-  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
+public class CallbackTest extends BaseOIDCTest {
   private static final int MOCK_PORT = 9099;
-
-  private static OIDC<?> oidc;
-
-  @BeforeClass
-  public static void setupOIDC() {
-    var config = OIDCConfig.builder()
-                           .issuer(STANDARD_ISSUER)
-                           .clientId(STANDARD_APP_ID)
-                           .clientSecret(STANDARD_APP_SECRET)
-                           .build();
-    oidc = OIDC.create(config);
-  }
 
   private static void assertExpiresIn(Long actual) {
     assertNotNull(actual);

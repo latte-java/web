@@ -31,6 +31,11 @@ public class LoginHandler implements Handler {
 
     Tools.addTransientCookie(req, res, config.stateCookieName(), state);
 
+    String returnTo = req.getURLParameter("return_to");
+    if (isSafeReturnTo(returnTo)) {
+      Tools.addTransientCookie(req, res, config.returnToCookieName(), returnTo);
+    }
+
     URI redirectURI = config.fullRedirectURI(req);
     StringBuilder url = new StringBuilder(config.authorizeEndpoint().toString());
     url.append(url.indexOf("?") < 0 ? '?' : '&');
@@ -42,6 +47,23 @@ public class LoginHandler implements Handler {
     url.append("&code_challenge=").append(codeChallenge);
     url.append("&code_challenge_method=S256");
 
+    String idpHint = req.getURLParameter("idp_hint");
+    if (idpHint != null && !idpHint.isBlank()) {
+      url.append("&idp_hint=").append(URLEncoder.encode(idpHint, StandardCharsets.UTF_8));
+    }
+
     res.sendRedirect(url.toString());
+  }
+
+  private static boolean isSafeReturnTo(String value) {
+    if (value == null || value.isBlank()) {
+      return false;
+    }
+
+    if (!value.startsWith("/")) {
+      return false;
+    }
+
+    return !value.startsWith("//") && !value.startsWith("/\\");
   }
 }

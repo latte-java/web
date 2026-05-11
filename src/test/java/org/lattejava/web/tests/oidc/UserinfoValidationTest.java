@@ -13,8 +13,7 @@ import org.lattejava.web.tests.*;
 import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
-public class UserinfoValidationTest extends BaseWebTest {
-  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
+public class UserinfoValidationTest extends BaseOIDCTest {
   private static final int MOCK_PORT = 9099;
 
   private static OIDC<?> userinfoOIDC;

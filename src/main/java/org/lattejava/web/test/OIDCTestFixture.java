@@ -67,9 +67,10 @@ public class OIDCTestFixture {
     return out;
   }
 
-  private static String walkRedirects(HttpClient client, URI current, HttpResponse<String> res, String redirectURI) throws Exception {
+  private static Result walkRedirects(HttpClient client, URI current, HttpResponse<String> res, String redirectURI) throws Exception {
+    String location = null;
     while (res.statusCode() / 100 == 3) {
-      String location = res.headers().firstValue("Location").orElse(null);
+      location = res.headers().firstValue("Location").orElse(null);
       if (location == null) {
         throw new IllegalStateException("Redirect with no Location at [" + current + "] status=[" + res.statusCode() + "]");
       }
@@ -80,14 +81,14 @@ public class OIDCTestFixture {
         if (code == null) {
           throw new IllegalStateException("OIDC authorize landed at [" + next + "] without a code");
         }
-        return code;
+        return new Result(code, null, 0);
       }
 
       current = next;
       res = client.send(HttpRequest.newBuilder(current).GET().build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    return null;
+    return new Result(null, location, res.statusCode());
   }
 
   /**
@@ -215,9 +216,9 @@ public class OIDCTestFixture {
     URI current = URI.create(authorize + "?" + formEncode(oauthParams));
     HttpResponse<String> res = client.send(HttpRequest.newBuilder(current).GET().build(), HttpResponse.BodyHandlers.ofString());
 
-    String codeFromGet = walkRedirects(client, current, res, redirectURI);
-    if (codeFromGet != null) {
-      return new AuthorizationCode(codeFromGet, state);
+    Result result = walkRedirects(client, current, res, redirectURI);
+    if (result.code() != null) {
+      return new AuthorizationCode(result.code(), state);
     }
 
     Map<String, String> postForm = new LinkedHashMap<>(oauthParams);
@@ -230,12 +231,12 @@ public class OIDCTestFixture {
                                  .build(),
         HttpResponse.BodyHandlers.ofString());
 
-    String codeFromPost = walkRedirects(client, current, res, redirectURI);
-    if (codeFromPost != null) {
-      return new AuthorizationCode(codeFromPost, state);
+    result = walkRedirects(client, current, res, redirectURI);
+    if (result.code() != null) {
+      return new AuthorizationCode(result.code(), state);
     }
 
-    throw new IllegalStateException("OIDC authorize chain did not land at [" + redirectURI + "]");
+    throw new IllegalStateException("OIDC authorize chain did not land at [" + redirectURI + "]. The last redirect was [" + result.lastLocation() + "] with status [" + result.lastStatusCode() + "]");
   }
 
   /**
@@ -243,6 +244,8 @@ public class OIDCTestFixture {
    */
   public record AuthorizationCode(String code, String state) {
   }
+
+  public record Result(String code, String lastLocation, int lastStatusCode) {}
 
   /**
    * The bundle the IdP returned from the token-exchange step. {@code refreshToken} and {@code idToken} are nullable;

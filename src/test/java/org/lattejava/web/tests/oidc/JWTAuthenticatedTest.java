@@ -7,29 +7,13 @@ package org.lattejava.web.tests.oidc;
 import module java.base;
 import module java.net.http;
 import module org.lattejava.http;
-import module org.lattejava.jwt;
 import module org.lattejava.web;
 import module org.testng;
-
-import org.lattejava.web.tests.*;
 
 import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
-public class JWTAuthenticatedTest extends BaseWebTest {
-  private static final FusionAuthFixture FIXTURE = new FusionAuthFixture();
-  private static OIDC<String> oidc;
-
-  @BeforeClass
-  public static void setupOIDC() {
-    var config = OIDCConfig.builder()
-                           .issuer(STANDARD_ISSUER)
-                           .clientId(STANDARD_APP_ID)
-                           .clientSecret(STANDARD_APP_SECRET)
-                           .build();
-    oidc = OIDC.create(config, JWT::subject);
-  }
-
+public class JWTAuthenticatedTest extends BaseOIDCTest {
   @Test
   public void invalidAccessToken_invalidRefreshToken_clearsAuthCookies_returns401() throws Exception {
     try (var web = new Web()) {
