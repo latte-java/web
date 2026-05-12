@@ -26,6 +26,7 @@ public class Web implements AutoCloseable {
   private Path baseDir;
   private Level logLevel;
   private LoggerFactory loggerFactory;
+  private Handler missingHandler;
   private HTTPServer server;
   private Thread shutdownHook;
 
@@ -230,6 +231,28 @@ public class Web implements AutoCloseable {
     }
     Objects.requireNonNull(loggerFactory, "loggerFactory must not be null");
     this.loggerFactory = loggerFactory;
+    return this;
+  }
+
+  /**
+   * Sets the handler invoked when no route matches the request path. The handler receives the request and response
+   * just like a route handler; it is responsible for setting an appropriate status (the default 404 behavior is
+   * replaced wholesale). Any prefix middlewares that matched the unmatched path's prefix still run before this
+   * handler is invoked.
+   *
+   * @param handler The handler to invoke for unmatched paths.
+   * @return This Web instance for chaining.
+   * @throws IllegalStateException if called on a prefix child Web, or after {@link #start(int)}.
+   */
+  public Web missingHandler(Handler handler) {
+    if (isChild) {
+      throw new IllegalStateException("Cannot call missingHandler on a prefix child Web instance");
+    }
+    if (started.get()) {
+      throw new IllegalStateException("Cannot set missingHandler after Web has been started");
+    }
+    Objects.requireNonNull(handler, "handler must not be null");
+    this.missingHandler = handler;
     return this;
   }
 
@@ -521,14 +544,14 @@ public class Web implements AutoCloseable {
         response.setHeader("Allow", String.join(", ", allowedMethods));
       }
       case RouteTrie.Outcome.NotFound(var segments) -> {
+        Handler notFound = missingHandler != null ? missingHandler : (_, res) -> res.setStatus(404);
         List<Middleware> prefixMiddlewares = middlewareTrie.collect(segments);
         if (prefixMiddlewares.isEmpty()) {
-          response.setStatus(404);
+          notFound.handle(request, response);
         } else {
-          new MiddlewareChainImpl(prefixMiddlewares, (_, res) -> res.setStatus(404)).next(request, response);
+          new MiddlewareChainImpl(prefixMiddlewares, notFound).next(request, response);
         }
       }
     }
   }
-
 }
