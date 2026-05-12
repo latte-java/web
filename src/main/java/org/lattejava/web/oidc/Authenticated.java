@@ -80,7 +80,7 @@ public class Authenticated implements Middleware {
   protected void unauthorized(HTTPRequest req, HTTPResponse res) throws Exception {
     // This assumes the access, id, and refresh tokens are toast, but the returnTo cookie might still be used for the
     // final redirect, so it is set here because this is the requested URL we should return to
-    Tools.clearAllAuthCookies(res, config);
+    Tools.clearAllAuthCookies(req, res, config);
     Tools.addTransientCookie(req, res, config.returnToCookieName(), req.getBaseURL() + req.getPath());
     res.sendRedirect(config.loginPath());
   }
