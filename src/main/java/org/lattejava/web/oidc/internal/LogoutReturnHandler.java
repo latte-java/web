@@ -21,7 +21,7 @@ public class LogoutReturnHandler implements Handler {
 
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) throws Exception {
-    Tools.clearAllCookies(res, config);
+    Tools.clearAllCookies(req, res, config);
     res.sendRedirect(config.postLogout());
   }
 }

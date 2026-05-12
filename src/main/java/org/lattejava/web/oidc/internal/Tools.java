@@ -71,35 +71,35 @@ public class Tools {
   /**
    * Clears all authentication cookies from the response.
    *
+   * @param req    The request.
    * @param res    The response.
    * @param config The OIDC configuration used to pull the cookie names from.
    */
-  public static void clearAllAuthCookies(HTTPResponse res, OIDCConfig config) {
-    clearCookie(res, config.accessTokenCookieName());
-    clearCookie(res, config.idTokenCookieName());
-    clearCookie(res, config.refreshTokenCookieName());
+  public static void clearAllAuthCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config) {
+    clearCookie(req, res, config.accessTokenCookieName());
+    clearCookie(req, res, config.idTokenCookieName());
+    clearCookie(req, res, config.refreshTokenCookieName());
   }
 
   /**
    * Clears all the cookies used by the OIDC middleware.
    *
+   * @param req    The request.
    * @param res    The response.
    * @param config The OIDC configuration used to pull the cookie names from.
    */
-  public static void clearAllCookies(HTTPResponse res, OIDCConfig config) {
-    clearAllAuthCookies(res, config);
-    clearCookie(res, config.stateCookieName());
-    clearCookie(res, config.returnToCookieName());
+  public static void clearAllCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config) {
+    clearAllAuthCookies(req, res, config);
+    clearCookie(req, res, config.stateCookieName());
+    clearCookie(req, res, config.returnToCookieName());
   }
 
   /**
    * Clears a cookie by setting its value to empty with Max-Age=0.
    */
-  public static void clearCookie(HTTPResponse res, String name) {
+  public static void clearCookie(HTTPRequest req, HTTPResponse res, String name) {
     Cookie c = new Cookie(name, "");
-    c.setPath("/");
-    c.setSecure(true);
-    c.setSameSite(Cookie.SameSite.Strict);
+    addCommonCookieSettings(c, req);
     c.setMaxAge(0L);
     res.addCookie(c);
   }

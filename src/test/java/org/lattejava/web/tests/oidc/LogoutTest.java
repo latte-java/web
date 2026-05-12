@@ -53,6 +53,34 @@ public class LogoutTest extends BaseOIDCTest {
   }
 
   @Test
+  public void logoutPath_withoutLogoutEndpoint_clearedCookies_omitSecureFlag_overHttp() throws Exception {
+    // When original cookies are set without Secure (plain http://localhost), the cleared
+    // Set-Cookie must also omit Secure. Otherwise Safari drops the clear directive on plain
+    // HTTP and the cookies persist (logout silently fails). Regression guard against the
+    // hardcoded Secure=true that previously lived in Tools.clearCookie.
+    OIDC<?> noLogoutOIDC = OIDC.create(OIDCConfig.builder()
+                                                 .authorizeEndpoint(URI.create("http://localhost:9010/oauth2/authorize"))
+                                                 .tokenEndpoint(URI.create("http://localhost:9010/oauth2/token"))
+                                                 .userinfoEndpoint(URI.create("http://localhost:9010/oauth2/userinfo"))
+                                                 .jwksEndpoint(URI.create("http://localhost:9010/.well-known/jwks.json"))
+                                                 .clientId(STANDARD_APP_ID)
+                                                 .clientSecret(STANDARD_APP_SECRET)
+                                                 .build());
+
+    try (var web = new Web()) {
+      web.install(noLogoutOIDC);
+      web.start(PORT);
+
+      HttpResponse<String> res = get("/logout", "access_token=a; id_token=i; refresh_token=r");
+      for (String name : List.of("access_token", "id_token", "refresh_token", "oidc_state", "oidc_return_to")) {
+        Cookie c = getCookie(res, name);
+        assertNotNull(c, "Expected cleared [" + name + "] cookie");
+        assertFalse(c.isSecure(), "Cleared [" + name + "] cookie must NOT have Secure on plain HTTP; Safari drops Set-Cookie with Secure over http and the cookie persists.");
+      }
+    }
+  }
+
+  @Test
   public void logoutPath_withoutLogoutEndpoint_clearsCookies_andRedirectsToPostLogoutPage() throws Exception {
     OIDC<?> noLogoutOIDC = OIDC.create(OIDCConfig.builder()
                                                  .authorizeEndpoint(URI.create("http://localhost:9010/oauth2/authorize"))
@@ -75,6 +103,46 @@ public class LogoutTest extends BaseOIDCTest {
         Cookie c = getCookie(res, name);
         assertNotNull(c, "Expected cleared [" + name + "] cookie");
         assertEquals(c.getMaxAge(), Long.valueOf(0L));
+      }
+    }
+  }
+
+  @Test
+  public void logoutReturnPath_clearedCookies_omitSecureFlag_overHttp() throws Exception {
+    try (var web = new Web()) {
+      web.install(oidc);
+      web.start(PORT);
+
+      HttpResponse<String> res = get("/oidc/logout-return", "access_token=a; id_token=i; refresh_token=r; oidc_state=s; oidc_return_to=here");
+      for (String name : List.of("access_token", "id_token", "refresh_token", "oidc_state", "oidc_return_to")) {
+        Cookie c = getCookie(res, name);
+        assertNotNull(c, "Expected cleared [" + name + "] cookie");
+        assertFalse(c.isSecure(), "Cleared [" + name + "] cookie must NOT have Secure on plain HTTP; Safari drops Set-Cookie with Secure over http and the cookie persists.");
+      }
+    }
+  }
+
+  @Test
+  public void logoutReturnPath_clearedCookies_setSecureFlag_whenForwardedHttps() throws Exception {
+    try (var web = new Web()) {
+      web.install(oidc);
+      web.start(PORT);
+
+      try (HttpClient client = HttpClient.newBuilder()
+                                         .followRedirects(HttpClient.Redirect.NEVER)
+                                         .build()) {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(BASE_URL + "/oidc/logout-return"))
+                                     .header("X-Forwarded-Proto", "https")
+                                     .header("Cookie", "access_token=a; id_token=i; refresh_token=r; oidc_state=s; oidc_return_to=here")
+                                     .GET()
+                                     .build();
+        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+
+        for (String name : List.of("access_token", "id_token", "refresh_token", "oidc_state", "oidc_return_to")) {
+          Cookie c = getCookie(res, name);
+          assertNotNull(c, "Expected cleared [" + name + "] cookie");
+          assertTrue(c.isSecure(), "Cleared [" + name + "] cookie SHOULD have Secure when X-Forwarded-Proto indicates https; otherwise it won't match the original cookie set with Secure and the clear may be ignored by strict browsers.");
+        }
       }
     }
   }

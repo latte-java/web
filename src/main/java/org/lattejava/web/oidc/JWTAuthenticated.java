@@ -25,7 +25,7 @@ public class JWTAuthenticated extends Authenticated {
 
   @Override
   protected void unauthorized(HTTPRequest req, HTTPResponse res) {
-    Tools.clearAllAuthCookies(res, config);
+    Tools.clearAllAuthCookies(req, res, config);
     res.setStatus(401);
   }
 }

@@ -25,7 +25,7 @@ public class LogoutHandler implements Handler {
   public void handle(HTTPRequest req, HTTPResponse res) throws Exception {
     URI logoutEndpoint = config.logoutEndpoint();
     if (logoutEndpoint == null) {
-      Tools.clearAllCookies(res, config);
+      Tools.clearAllCookies(req, res, config);
       res.sendRedirect(config.postLogout());
       return;
     }
@@ -43,6 +43,23 @@ public class LogoutHandler implements Handler {
       url.append("&id_token_hint=")
          .append(URLEncoder.encode(idToken, StandardCharsets.UTF_8));
     }
-    res.sendRedirect(url.toString());
+
+    if (req.getMethod().is(HTTPMethod.POST)) {
+      // POSTs might not work if the CSP is strict. This uses a meta-refresh to break a CSP redirect after a form post
+      res.setStatus(200);
+      res.setContentType("text/html; charset=utf-8");
+      res.getWriter().write("""
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta http-equiv="refresh" content="0; url=%1$s">
+            <title>Redirecting…</title>
+          </head>
+          </html>
+          """.formatted(url));
+    } else {
+      res.sendRedirect(url.toString());
+    }
   }
 }
