@@ -19,6 +19,42 @@ public class SecurityHeadersTest extends BaseWebTest {
   }
 
   @Test
+  public void builder_acceptsCSPOverload() throws Exception {
+    try (var web = new Web()) {
+      web.install(SecurityHeaders.builder()
+                                 .contentSecurityPolicy(CSP.defaults()
+                                                           .addStyleSrc("https://cdn.example.com"))
+                                 .build());
+      web.get("/x", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/x");
+      String csp = response.headers().firstValue("Content-Security-Policy").orElse(null);
+      assertNotNull(csp, "Content-Security-Policy should be set");
+      assertTrue(csp.contains("style-src 'self' https://fonts.googleapis.com https://cdn.example.com"),
+          "CSP should include the added style-src host: [" + csp + "]");
+      // Localhost UIR strip still applies on top of the CSP overload
+      assertFalse(csp.contains("upgrade-insecure-requests"),
+          "CSP should not contain upgrade-insecure-requests for localhost: [" + csp + "]");
+    }
+  }
+
+  @Test
+  public void builder_cspOverloadNullSuppresses() throws Exception {
+    try (var web = new Web()) {
+      web.install(SecurityHeaders.builder()
+                                 .contentSecurityPolicy((CSP) null)
+                                 .build());
+      web.get("/x", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/x");
+      assertFalse(response.headers().firstValue("Content-Security-Policy").isPresent(),
+          "Content-Security-Policy should be suppressed");
+    }
+  }
+
+  @Test
   public void builder_nullSuppressesHeader() throws Exception {
     try (var web = new Web()) {
       web.install(SecurityHeaders.builder()

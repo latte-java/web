@@ -107,9 +107,7 @@ public class SecurityHeaders implements Middleware {
    * any setter to override, or pass {@code null} to suppress that header entirely.
    */
   public static class Builder {
-    private String contentSecurityPolicy = "default-src 'self'; style-src 'self' https://fonts.googleapis.com; " +
-        "font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; " +
-        "form-action 'self'; upgrade-insecure-requests";
+    private String contentSecurityPolicy = CSP.defaults().build();
     private String crossOriginEmbedderPolicy = "require-corp";
     private String crossOriginOpenerPolicy = "same-origin";
     private String crossOriginResourcePolicy = "same-origin";
@@ -125,6 +123,11 @@ public class SecurityHeaders implements Middleware {
      */
     public SecurityHeaders build() {
       return new SecurityHeaders(this);
+    }
+
+    public Builder contentSecurityPolicy(CSP csp) {
+      this.contentSecurityPolicy = csp == null ? null : csp.build();
+      return this;
     }
 
     public Builder contentSecurityPolicy(String value) {
