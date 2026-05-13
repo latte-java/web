@@ -28,6 +28,7 @@ import static java.nio.charset.StandardCharsets.*;
 @SuppressWarnings("unused")
 public class WebTest {
   public final CookieJar cookies = new CookieJar();
+  public final List<Map.Entry<String, String>> formFields = new ArrayList<>();
   public final List<Map.Entry<String, String>> headers = new ArrayList<>();
   public final int port;
   public final List<Map.Entry<String, String>> urlParameters = new ArrayList<>();
@@ -84,9 +85,10 @@ public class WebTest {
   }
 
   public void clearRequestState() {
+    body = null;
+    formFields.clear();
     headers.clear();
     urlParameters.clear();
-    body = null;
   }
 
   /**
@@ -172,13 +174,15 @@ public class WebTest {
   }
 
   /**
-   * Sets the request body. Subsequent verb calls will send this body.
+   * Sets the request body. Subsequent verb calls will send this body. Clears any form fields previously registered via
+   * {@link #withForm(Map)} or {@link #withFormField(String, String)} — the most recent call wins.
    *
    * @param body The body to send.
    * @return This tester for chaining.
    */
   public WebTest withBody(byte[] body) {
     this.body = body;
+    this.formFields.clear();
     return this;
   }
 
@@ -216,6 +220,40 @@ public class WebTest {
   }
 
   /**
+   * Replaces any previously registered form fields with the entries from the given map (iteration order preserved) and
+   * clears any explicit body set via {@link #withBody(byte[])} — the most recent call wins. On send, the fields are
+   * encoded as {@code application/x-www-form-urlencoded} and used as the request body; the {@code Content-Type} header
+   * is auto-set to {@code application/x-www-form-urlencoded} unless the caller has already supplied one.
+   *
+   * @param form The form fields to send.
+   * @return This tester for chaining.
+   */
+  public WebTest withForm(Map<String, String> form) {
+    this.body = null;
+    this.formFields.clear();
+    for (Map.Entry<String, String> entry : form.entrySet()) {
+      this.formFields.add(Map.entry(entry.getKey(), entry.getValue()));
+    }
+    return this;
+  }
+
+  /**
+   * Appends a single form field and clears any explicit body set via {@link #withBody(byte[])} — the most recent call
+   * wins. Duplicate names are preserved and sent in registration order. On send, the fields are encoded as
+   * {@code application/x-www-form-urlencoded} and used as the request body; the {@code Content-Type} header is auto-set
+   * to {@code application/x-www-form-urlencoded} unless the caller has already supplied one.
+   *
+   * @param name  The field name.
+   * @param value The field value.
+   * @return This tester for chaining.
+   */
+  public WebTest withFormField(String name, String value) {
+    this.body = null;
+    this.formFields.add(Map.entry(name, value));
+    return this;
+  }
+
+  /**
    * Adds a request header. Multiple values for the same header name are supported and sent in registration order.
    *
    * @param name  The header name.
@@ -244,6 +282,28 @@ public class WebTest {
     var builder = HttpRequest.newBuilder()
                              .uri(buildURI(path));
 
+    // Body — form fields take precedence when present; withBody and withForm* clear each other so they never coexist.
+    byte[] bodyBytes;
+    if (!formFields.isEmpty()) {
+      bodyBytes = formFields.stream()
+                            .map(e -> URLEncoder.encode(e.getKey(), UTF_8) + "=" + URLEncoder.encode(e.getValue(), UTF_8))
+                            .collect(Collectors.joining("&"))
+                            .getBytes(UTF_8);
+
+      var contentType = headers.stream()
+                               .filter(e -> e.getKey().equalsIgnoreCase("Content-Type"))
+                               .findFirst()
+                               .orElse(null);
+      if (contentType == null) {
+        builder.header("Content-Type", "application/x-www-form-urlencoded");
+      } else if (!contentType.getValue().toLowerCase(Locale.ROOT).startsWith("application/x-www-form-urlencoded")) {
+        throw new IllegalStateException("You cannot set the Content-Type header to something other than " +
+            "[application/x-www-form-urlencoded] when using withForm* methods.");
+      }
+    } else {
+      bodyBytes = body;
+    }
+
     // Headers
     for (Map.Entry<String, String> entry : headers) {
       builder.header(entry.getKey(), entry.getValue());
@@ -256,8 +316,8 @@ public class WebTest {
     }
 
     // Body and method
-    HttpRequest.BodyPublisher publisher = body != null
-        ? HttpRequest.BodyPublishers.ofByteArray(body)
+    HttpRequest.BodyPublisher publisher = bodyBytes != null
+        ? HttpRequest.BodyPublishers.ofByteArray(bodyBytes)
         : HttpRequest.BodyPublishers.noBody();
     builder.method(method, publisher);
 
