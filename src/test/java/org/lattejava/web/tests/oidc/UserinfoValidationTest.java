@@ -39,7 +39,9 @@ public class UserinfoValidationTest extends BaseOIDCTest {
       });
       web.start(PORT);
 
-      HttpResponse<String> res = get("/protected/page", "access_token=tampered");
+      // With no refresh token cookie the first hop is now the SameSite cross-site interstitial; the guard param
+      // represents the browser's same-site follow-up, where the absence of a refresh token is final.
+      HttpResponse<String> res = get("/protected/page?" + Authenticated.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
       assertEquals(res.statusCode(), 302);
       assertEquals(res.headers().firstValue("Location").orElse(null), "/login");
     }

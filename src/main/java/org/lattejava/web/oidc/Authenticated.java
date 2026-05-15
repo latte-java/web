@@ -25,6 +25,7 @@ import module org.lattejava.web;
  * @author Brian Pontarelli
  */
 public class Authenticated implements Middleware {
+  public static final String CSR_REDIRECT_PARAM = "csroidcredirect";
   protected final OIDCConfig config;
   private final TokenValidator tokenValidator;
 
@@ -46,6 +47,28 @@ public class Authenticated implements Middleware {
     TokenValidator.Result result = tokenValidator.validate(accessToken, true);
     TokenValidator.Result.Valid valid;
     if (result instanceof TokenValidator.Result.Invalid) {
+      // Check if a refresh is possible
+      String refreshToken = Tools.readCookie(req, config.refreshTokenCookieName());
+      boolean notRedirected = req.getURLParameter(CSR_REDIRECT_PARAM) == null;
+      if (refreshToken == null && notRedirected) {
+        // This case happens when the browser is handling SameSite Strict and a Cross-Site Request (or the refresh
+        // token was deleted by the user or some other code). Therefore, we can send the user to an interstitial page
+        // that does a refresh back to the original page via a meta-refresh. And if that fails, then it is certain that
+        // they need to log in again. For V1, I'm just gonna write out a meta-refresh here manually to break the
+        // SameSite restriction.
+
+        // This prevents infinite redirect loops
+        String url = req.getReconstructedURL();
+        if (url.contains("?")) {
+          url += "&" + CSR_REDIRECT_PARAM + "=1";
+        } else {
+          url += "?" + CSR_REDIRECT_PARAM + "=1";
+        }
+
+        Tools.writeMetaRefresh(res, url);
+        return;
+      }
+
       JWT refreshed = attemptRefresh(req, res);
       if (refreshed == null) {
         unauthorized(req, res);

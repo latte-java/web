@@ -35,17 +35,20 @@ public class Tools {
    * Sets all the auth cookies using the correct settings for each. If any are null, they are not set. This ensures that
    * the code doesn't drift and set invalid auth cookies.
    */
-  public static void addAuthCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config, String idToken, String accessToken, String refreshToken, long expirySeconds) {
+  public static void addAuthCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config, String idToken,
+                                    String accessToken, String refreshToken, long expirySeconds) {
     if (idToken != null) {
       COOKIES.write(config.idTokenCookieName(), idToken)
              .httpOnly(false)
              .maxAge(Duration.ofSeconds(expirySeconds))
+             .sameSite(Cookie.SameSite.Lax)
              .to(req, res);
     }
 
     if (accessToken != null) {
       COOKIES.write(config.accessTokenCookieName(), accessToken)
              .maxAge(Duration.ofSeconds(expirySeconds))
+             .sameSite(Cookie.SameSite.Lax)
              .to(req, res);
     }
 
@@ -203,6 +206,28 @@ public class Tools {
       builder.claim(e.getKey(), unwrap(e.getValue()));
     }
     return builder.build();
+  }
+
+  /**
+   * Writes out a simple HTML page that performs a meta refresh to the given URL.
+   *
+   * @param res The response to write the HTML to.
+   * @param url The URL to refresh to.
+   * @throws IOException If the write fails.
+   */
+  public static void writeMetaRefresh(HTTPResponse res, String url) throws IOException {
+    res.setStatus(200);
+    res.setContentType("text/html; charset=utf-8");
+    res.getWriter().write("""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta http-equiv="refresh" content="0; url=%1$s">
+          <title>Redirecting…</title>
+        </head>
+        </html>
+        """.formatted(url));
   }
 
   private static Object unwrap(JsonNode node) {
