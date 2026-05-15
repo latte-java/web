@@ -26,6 +26,8 @@ public class Tools {
 
   public static final ObjectMapper MAPPER = new ObjectMapper();
 
+  private static final Cookies COOKIES = Cookies.newInstance();
+
   private Tools() {
   }
 
@@ -35,26 +37,22 @@ public class Tools {
    */
   public static void addAuthCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config, String idToken, String accessToken, String refreshToken, long expirySeconds) {
     if (idToken != null) {
-      Cookie c = new Cookie(config.idTokenCookieName(), idToken);
-      addCommonCookieSettings(c, req);
-      c.setMaxAge(expirySeconds);
-      res.addCookie(c);
+      COOKIES.write(config.idTokenCookieName(), idToken)
+             .httpOnly(false)
+             .maxAge(Duration.ofSeconds(expirySeconds))
+             .to(req, res);
     }
 
     if (accessToken != null) {
-      Cookie c = new Cookie(config.accessTokenCookieName(), accessToken);
-      addCommonCookieSettings(c, req);
-      c.setMaxAge(expirySeconds);
-      c.setHttpOnly(true);
-      res.addCookie(c);
+      COOKIES.write(config.accessTokenCookieName(), accessToken)
+             .maxAge(Duration.ofSeconds(expirySeconds))
+             .to(req, res);
     }
 
     if (refreshToken != null) {
-      Cookie c = new Cookie(config.refreshTokenCookieName(), refreshToken);
-      addCommonCookieSettings(c, req);
-      c.setMaxAge(config.refreshTokenMaxAge().toSeconds());
-      c.setHttpOnly(true);
-      res.addCookie(c);
+      COOKIES.write(config.refreshTokenCookieName(), refreshToken)
+             .maxAge(config.refreshTokenMaxAge())
+             .to(req, res);
     }
   }
 
@@ -62,10 +60,7 @@ public class Tools {
    * Sets a transient cookie (no Max-Age, so the browser discards it at the end of the current session).
    */
   public static void addTransientCookie(HTTPRequest req, HTTPResponse res, String name, String value) {
-    Cookie c = new Cookie(name, value);
-    addCommonCookieSettings(c, req);
-    c.setHttpOnly(true);
-    res.addCookie(c);
+    COOKIES.write(name, value).to(req, res);
   }
 
   /**
@@ -98,10 +93,7 @@ public class Tools {
    * Clears a cookie by setting its value to empty with Max-Age=0.
    */
   public static void clearCookie(HTTPRequest req, HTTPResponse res, String name) {
-    Cookie c = new Cookie(name, "");
-    addCommonCookieSettings(c, req);
-    c.setMaxAge(0L);
-    res.addCookie(c);
+    COOKIES.clear(name).from(req, res);
   }
 
   public static String computeCodeChallenge(String verifier) {
@@ -150,8 +142,7 @@ public class Tools {
    * @return The cookie value, or null.
    */
   public static String readCookie(HTTPRequest req, String name) {
-    Cookie c = req.getCookie(name);
-    return c != null ? c.value : null;
+    return COOKIES.read(name).from(req);
   }
 
   /**
@@ -212,12 +203,6 @@ public class Tools {
       builder.claim(e.getKey(), unwrap(e.getValue()));
     }
     return builder.build();
-  }
-
-  private static void addCommonCookieSettings(Cookie c, HTTPRequest req) {
-    c.setPath("/");
-    c.setSecure(req.getScheme().equalsIgnoreCase("https") || "https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto")));
-    c.setSameSite(Cookie.SameSite.Strict);
   }
 
   private static Object unwrap(JsonNode node) {
