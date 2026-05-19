@@ -75,17 +75,9 @@ public class MiddlewareTest extends BaseWebTest {
   }
 
   @Test
-  public void middleware_executionOrder_globalThenPerRoute() throws Exception {
+  public void middleware_executionOrder_filteredGlobalThenPerRoute() throws Exception {
     try (var web = new Web()) {
       var order = new java.util.ArrayList<String>();
-      web.install((req, res, chain) -> {
-        order.add("g1");
-        chain.next(req, res);
-      });
-      web.install((req, res, chain) -> {
-        order.add("g2");
-        chain.next(req, res);
-      });
       web.get("/test",
           (_, res) -> {
             order.add("handler");
@@ -100,6 +92,80 @@ public class MiddlewareTest extends BaseWebTest {
             chain.next(req, res);
           }
       );
+      web.install(new FilteredMiddleware("/invalid", (req, res, chain) -> {
+        order.add("g1");
+        chain.next(req, res);
+      }));
+      web.install((req, res, chain) -> {
+        order.add("g2");
+        chain.next(req, res);
+      });
+      web.start(PORT);
+
+      send("GET", "/test");
+      assertEquals(order, java.util.List.of("g2", "r1", "r2", "handler"));
+    }
+  }
+
+  @Test
+  public void middleware_executionOrder_globalThenPerRoute() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.get("/test",
+          (_, res) -> {
+            order.add("handler");
+            res.setStatus(200);
+          },
+          (req, res, chain) -> {
+            order.add("r1");
+            chain.next(req, res);
+          },
+          (req, res, chain) -> {
+            order.add("r2");
+            chain.next(req, res);
+          }
+      );
+      web.install((req, res, chain) -> {
+        order.add("g1");
+        chain.next(req, res);
+      });
+      web.install((req, res, chain) -> {
+        order.add("g2");
+        chain.next(req, res);
+      });
+      web.start(PORT);
+
+      send("GET", "/test");
+      assertEquals(order, java.util.List.of("g1", "g2", "r1", "r2", "handler"));
+    }
+  }
+
+  @Test
+  public void middleware_executionOrder_perRouteThenGlobal() throws Exception {
+    try (var web = new Web()) {
+      var order = new java.util.ArrayList<String>();
+      web.get("/test",
+          (_, res) -> {
+            order.add("handler");
+            res.setStatus(200);
+          },
+          (req, res, chain) -> {
+            order.add("r1");
+            chain.next(req, res);
+          },
+          (req, res, chain) -> {
+            order.add("r2");
+            chain.next(req, res);
+          }
+      );
+      web.install((req, res, chain) -> {
+        order.add("g1");
+        chain.next(req, res);
+      });
+      web.install((req, res, chain) -> {
+        order.add("g2");
+        chain.next(req, res);
+      });
       web.start(PORT);
 
       send("GET", "/test");
