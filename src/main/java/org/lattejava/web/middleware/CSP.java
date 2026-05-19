@@ -24,7 +24,7 @@ public class CSP {
   public static final String UNSAFE_INLINE = "'unsafe-inline'";
   public static final String WASM_UNSAFE_EVAL = "'wasm-unsafe-eval'";
   private static final Pattern DIRECTIVE_NAME = Pattern.compile("[a-z][a-z0-9-]*");
-  private final LinkedHashMap<String, List<String>> directives = new LinkedHashMap<>();
+  private final Map<String, List<String>> directives = new LinkedHashMap<>();
 
   private CSP() {
   }
@@ -38,6 +38,7 @@ public class CSP {
         .defaultSrc(SELF)
         .styleSrc(SELF, "https://fonts.googleapis.com")
         .fontSrc(SELF, "https://fonts.gstatic.com")
+        .imgSrc(SELF)
         .objectSrc(NONE)
         .baseUri(SELF)
         .frameAncestors(NONE)

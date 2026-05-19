@@ -19,12 +19,11 @@ public class SecurityHeadersTest extends BaseWebTest {
   }
 
   @Test
-  public void builder_acceptsCSPOverload() throws Exception {
+  public void cspOverload_addsHost() throws Exception {
     try (var web = new Web()) {
-      web.install(SecurityHeaders.builder()
+      web.install(SecurityHeaders.defaults()
                                  .contentSecurityPolicy(CSP.defaults()
-                                                           .addStyleSrc("https://cdn.example.com"))
-                                 .build());
+                                                           .addStyleSrc("https://cdn.example.com")));
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -40,11 +39,10 @@ public class SecurityHeadersTest extends BaseWebTest {
   }
 
   @Test
-  public void builder_cspOverloadNullSuppresses() throws Exception {
+  public void cspOverloadNullSuppresses() throws Exception {
     try (var web = new Web()) {
-      web.install(SecurityHeaders.builder()
-                                 .contentSecurityPolicy((CSP) null)
-                                 .build());
+      web.install(SecurityHeaders.defaults()
+                                 .contentSecurityPolicy((CSP) null));
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -55,11 +53,10 @@ public class SecurityHeadersTest extends BaseWebTest {
   }
 
   @Test
-  public void builder_nullSuppressesHeader() throws Exception {
+  public void nullSuppressesHeader() throws Exception {
     try (var web = new Web()) {
-      web.install(SecurityHeaders.builder()
-                                 .strictTransportSecurity(null)
-                                 .build());
+      web.install(SecurityHeaders.defaults()
+                                 .strictTransportSecurity(null));
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -72,11 +69,10 @@ public class SecurityHeadersTest extends BaseWebTest {
   }
 
   @Test
-  public void builder_overridesHeaderValue() throws Exception {
+  public void overridesHeaderValue() throws Exception {
     try (var web = new Web()) {
-      web.install(SecurityHeaders.builder()
-                                 .contentSecurityPolicy("default-src 'self'; script-src 'self' 'nonce-xyz'")
-                                 .build());
+      web.install(SecurityHeaders.defaults()
+                                 .contentSecurityPolicy("default-src 'self'; script-src 'self' 'nonce-xyz'"));
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -90,7 +86,7 @@ public class SecurityHeadersTest extends BaseWebTest {
   @Test
   public void csp_stripsUpgradeInsecureRequestsForLocalhost() throws Exception {
     try (var web = new Web()) {
-      web.install(new SecurityHeaders());
+      web.install(SecurityHeaders.defaults());
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -107,7 +103,7 @@ public class SecurityHeadersTest extends BaseWebTest {
   @Test
   public void csp_stripsUpgradeInsecureRequestsForLoopbackIP() throws Exception {
     try (var web = new Web()) {
-      web.install(new SecurityHeaders());
+      web.install(SecurityHeaders.defaults());
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -129,7 +125,7 @@ public class SecurityHeadersTest extends BaseWebTest {
   @Test
   public void defaults_emitsAllHeadersWithExpectedValues() throws Exception {
     try (var web = new Web()) {
-      web.install(new SecurityHeaders());
+      web.install(SecurityHeaders.defaults());
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -137,7 +133,7 @@ public class SecurityHeadersTest extends BaseWebTest {
       assertEquals(response.statusCode(), 200);
       assertHeader(response, "Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
       assertHeader(response, "Content-Security-Policy",
-          "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+          "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
       assertHeader(response, "X-Content-Type-Options", "nosniff");
       assertHeader(response, "X-Frame-Options", "DENY");
       assertHeader(response, "X-XSS-Protection", "0");
@@ -153,7 +149,7 @@ public class SecurityHeadersTest extends BaseWebTest {
   @Test
   public void handlerCanOverrideHeader() throws Exception {
     try (var web = new Web()) {
-      web.install(new SecurityHeaders());
+      web.install(SecurityHeaders.defaults());
       web.get("/x", (_, res) -> {
         res.setHeader("X-Frame-Options", "SAMEORIGIN");
         res.setStatus(200);
@@ -168,14 +164,14 @@ public class SecurityHeadersTest extends BaseWebTest {
   @Test
   public void headersPresentOn404() throws Exception {
     try (var web = new Web()) {
-      web.install(new SecurityHeaders());
+      web.install(SecurityHeaders.defaults());
       web.start(PORT);
 
       HttpResponse<String> response = send("GET", "/nope");
       assertEquals(response.statusCode(), 404);
       assertHeader(response, "X-Frame-Options", "DENY");
       assertHeader(response, "Content-Security-Policy",
-          "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+          "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
     }
   }
 
@@ -195,7 +191,7 @@ public class SecurityHeadersTest extends BaseWebTest {
         res.setHeader("X-XSS-Protection", "1");
         chain.next(req, res);
       });
-      web.install(new SecurityHeaders());
+      web.install(SecurityHeaders.defaults());
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -210,6 +206,40 @@ public class SecurityHeadersTest extends BaseWebTest {
       assertHeader(response, "X-Content-Type-Options", "foo");
       assertHeader(response, "X-Frame-Options", "SAMEORIGIN");
       assertHeader(response, "X-XSS-Protection", "1");
+    }
+  }
+
+  @Test
+  public void empty_emitsOnlyExplicitlySetHeader() throws Exception {
+    try (var web = new Web()) {
+      web.install(SecurityHeaders.empty().xFrameOptions("SAMEORIGIN"));
+      web.get("/x", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/x");
+      assertHeader(response, "X-Frame-Options", "SAMEORIGIN");
+      assertFalse(response.headers().firstValue("Content-Security-Policy").isPresent(),
+          "Content-Security-Policy should not be emitted by empty()");
+      assertFalse(response.headers().firstValue("Strict-Transport-Security").isPresent(),
+          "Strict-Transport-Security should not be emitted by empty()");
+      assertFalse(response.headers().firstValue("Referrer-Policy").isPresent(),
+          "Referrer-Policy should not be emitted by empty()");
+    }
+  }
+
+  @Test
+  public void setterDoesNotMutateReceiver() throws Exception {
+    SecurityHeaders base = SecurityHeaders.defaults();
+    SecurityHeaders derived = base.xFrameOptions("SAMEORIGIN");
+    assertNotSame(base, derived, "Setter must return a new instance");
+
+    try (var web = new Web()) {
+      web.install(base);
+      web.get("/x", (_, res) -> res.setStatus(200));
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/x");
+      assertHeader(response, "X-Frame-Options", "DENY");
     }
   }
 }

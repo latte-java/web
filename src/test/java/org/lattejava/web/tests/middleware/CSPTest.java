@@ -11,7 +11,7 @@ import static org.testng.Assert.*;
 
 public class CSPTest {
   public static final String DEFAULT = "default-src 'self'; style-src 'self' https://fonts.googleapis.com; " +
-      "font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; " +
+      "font-src 'self' https://fonts.gstatic.com; img-src 'self'; object-src 'none'; base-uri 'self'; " +
       "frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests";
 
   @Test

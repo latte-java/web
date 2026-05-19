@@ -36,30 +36,33 @@ A middleware that emits a strict set of HTTP security headers on every response.
 ## API
 
 ```java
-// All defaults
-web.install(new SecurityHeaders());
+// All secure defaults
+web.install(SecurityHeaders.defaults());
 
 // Override a header
-web.install(SecurityHeaders.builder()
-    .contentSecurityPolicy("default-src 'self'; script-src 'self' 'nonce-abc123'")
-    .build());
+web.install(SecurityHeaders.defaults()
+    .contentSecurityPolicy("default-src 'self'; script-src 'self' 'nonce-abc123'"));
 
 // Suppress a header (pass null)
-web.install(SecurityHeaders.builder()
-    .strictTransportSecurity(null)
-    .build());
+web.install(SecurityHeaders.defaults()
+    .strictTransportSecurity(null));
+
+// Only one header for a prefix/handler
+web.install(SecurityHeaders.empty()
+    .xFrameOptions("SAMEORIGIN"));
 ```
 
 `null` suppresses; any String (including empty) emits.
 
 ## Class shape
 
-One `String` field per header, each pre-populated by the `Builder` with its default. `SecurityHeaders` has:
+One `final String` field per header. `SecurityHeaders` has:
 
-- Public no-arg constructor (equivalent to `builder().build()`).
-- Private constructor that copies from the Builder.
-- Static `builder()` factory.
-- Public static nested `Builder` with one setter per header plus `build()`.
+- Private all-args constructor.
+- Static `defaults()` factory (all headers at secure defaults) and `empty()` factory (no headers).
+- One copy-on-write method per header returning a new immutable instance; `null` clears that header.
+
+Superseded by `docs/design/2026-05-18-security-headers-immutable.md`.
 
 ## Tests
 
