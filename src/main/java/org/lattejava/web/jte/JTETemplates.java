@@ -204,8 +204,8 @@ public class JTETemplates {
     merged.put("request", req);
     merged.put("response", res);
 
-    // Set the response headers first before we write to the stream
-    res.setStatus(200);
+    // Set the response headers first before we write to the stream. HTTPResponse defaults to 200, but something upstream
+    // might have set it to a different status, so we don't overwrite that here. We just need to set the content type
     res.setContentType("text/html; charset=utf-8");
 
     // Stream the output to the response

@@ -17,8 +17,8 @@ import static org.testng.Assert.*;
  * Exercises the SameSite-Strict / cross-site-request recovery path in {@link Authenticated}: when the access token is
  * invalid and no refresh token cookie is visible (the browser withheld the SameSite=Strict refresh token on a
  * cross-site entry navigation), the middleware serves a same-site meta-refresh interstitial so the refresh token is
- * sent on the follow-up request. The {@code csroidcredirect} guard parameter must ensure this happens at most once so
- * a missing/expired refresh token can never produce an infinite redirect loop.
+ * sent on the follow-up request. The {@code csroidcredirect} guard parameter must ensure this happens at most once so a
+ * missing/expired refresh token can never produce an infinite redirect loop.
  */
 public class CrossSiteRefreshTest extends BaseOIDCTest {
   private Web web;

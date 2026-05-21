@@ -25,7 +25,8 @@ final class Assertions {
   }
 
   /**
-   * Asserts that the two values are equal, throwing an {@link AssertionError} formatted in TestNG's wire format if not.
+   * Asserts that the two values are equal, throwing an {@link AssertionError} formatted in TestNG's wire format if
+   * not.
    *
    * @param actual   The actual value.
    * @param expected The expected value.

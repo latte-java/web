@@ -13,9 +13,9 @@ import static org.testng.Assert.fail;
 
 /**
  * FusionAuth-specific extension of {@link OIDCTestFixture} for tests that drive the kickstart-provisioned FusionAuth
- * instance at {@code localhost:9010}. Carries the constants for that instance (app IDs, secrets, the canned
- * admin/user credentials) and overrides {@link #clientSecretFor(String)} so a single fixture can log in to any of
- * the four kickstart-provisioned applications by ID.
+ * instance at {@code localhost:9010}. Carries the constants for that instance (app IDs, secrets, the canned admin/user
+ * credentials) and overrides {@link #clientSecretFor(String)} so a single fixture can log in to any of the four
+ * kickstart-provisioned applications by ID.
  * <p>
  * Mirrors {@code src/test/fusionauth/kickstart/kickstart.json}.
  */
@@ -78,8 +78,8 @@ public class FusionAuthFixture extends OIDCTestFixture {
   }
 
   /**
-   * Resolves the client secret for any kickstart-provisioned application by ID, allowing one fixture to log in to
-   * any of {@link #FAST_APP_ID}, {@link #KEYCLOAK_APP_ID}, {@link #ROTATING_APP_ID}, or {@link #STANDARD_APP_ID}.
+   * Resolves the client secret for any kickstart-provisioned application by ID, allowing one fixture to log in to any
+   * of {@link #FAST_APP_ID}, {@link #KEYCLOAK_APP_ID}, {@link #ROTATING_APP_ID}, or {@link #STANDARD_APP_ID}.
    *
    * @param applicationId The application UUID.
    * @return The corresponding client secret.

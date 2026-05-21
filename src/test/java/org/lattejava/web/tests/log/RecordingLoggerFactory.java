@@ -8,8 +8,8 @@ import module java.base;
 import module org.lattejava.http;
 
 /**
- * Test helper that records every log call for inspection. Returns a single shared {@link RecordingLogger} for any
- * class — matching the singleton semantics of the bundled factories so {@code setLevel} affects every observer.
+ * Test helper that records every log call for inspection. Returns a single shared {@link RecordingLogger} for any class
+ * — matching the singleton semantics of the bundled factories so {@code setLevel} affects every observer.
  *
  * @author Brian Pontarelli
  */

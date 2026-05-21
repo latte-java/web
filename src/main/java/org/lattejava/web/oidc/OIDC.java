@@ -148,7 +148,7 @@ public class OIDC<U> implements Middleware {
 
   /**
    * @return A new {@link JWTAuthenticated} middleware bound to this OpenIDConnect instance. Use this for API endpoints
-   * that share the session cookies with the browser but expect a 401 on failure instead of a login redirect.
+   *     that share the session cookies with the browser but expect a 401 on failure instead of a login redirect.
    */
   public JWTAuthenticated jwtAuthenticated() {
     return new JWTAuthenticated(config, jwks);

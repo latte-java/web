@@ -92,11 +92,11 @@ public class OIDCTestFixture {
   }
 
   /**
-   * Returns the client secret to send in the token-exchange Basic auth header for the given {@code applicationId}.
-   * The default returns {@link OIDCConfig#clientSecret()}, which is correct when the fixture's config is bound to
-   * the same OAuth client as {@code applicationId}. Subclasses that support multiple applications (e.g.
-   * {@code FusionAuthFixture}, which knows several kickstart-provisioned apps) override this to look the secret up
-   * by application id.
+   * Returns the client secret to send in the token-exchange Basic auth header for the given {@code applicationId}. The
+   * default returns {@link OIDCConfig#clientSecret()}, which is correct when the fixture's config is bound to the same
+   * OAuth client as {@code applicationId}. Subclasses that support multiple applications (e.g.
+   * {@code FusionAuthFixture}, which knows several kickstart-provisioned apps) override this to look the secret up by
+   * application id.
    *
    * @param applicationId The OAuth client UUID being logged in to.
    * @return The corresponding client secret.
@@ -108,8 +108,8 @@ public class OIDCTestFixture {
   /**
    * Walks the OAuth2 authorization-code flow against the configured IdP for the given user, exchanges the resulting
    * code for tokens, stores those tokens as cookies in the {@link WebTest} cookie jar, and returns them. After this
-   * call returns, subsequent requests through the test client are authenticated as the user; callers that need the
-   * raw tokens (e.g. for explicit {@code Cookie} headers) can use the returned {@link Tokens}.
+   * call returns, subsequent requests through the test client are authenticated as the user; callers that need the raw
+   * tokens (e.g. for explicit {@code Cookie} headers) can use the returned {@link Tokens}.
    *
    * @param email         The user's email address.
    * @param password      The user's password.
@@ -180,14 +180,14 @@ public class OIDCTestFixture {
 
   /**
    * Drives the IdP's hosted-login OAuth2 authorize flow as a browser would, then returns the resulting authorization
-   * code along with the {@code state} value (also the PKCE code-verifier under Latte's single-value scheme). Exposed
-   * to subclasses for fixtures that need direct access to the issued code without performing the token exchange.
+   * code along with the {@code state} value (also the PKCE code-verifier under Latte's single-value scheme). Exposed to
+   * subclasses for fixtures that need direct access to the issued code without performing the token exchange.
    *
    * @param email         The user's email.
    * @param password      The user's password.
    * @param applicationId The OAuth client (application) UUID.
-   * @param redirectURI   The redirect URI registered on the application; the walker stops as soon as a
-   *                      {@code Location} header points at this URI and parses the code from the query string.
+   * @param redirectURI   The redirect URI registered on the application; the walker stops as soon as a {@code Location}
+   *                      header points at this URI and parses the code from the query string.
    * @return The issued authorization code and the state used to obtain it.
    * @throws Exception If the authorize chain does not terminate at {@code redirectURI}.
    */
@@ -245,7 +245,8 @@ public class OIDCTestFixture {
   public record AuthorizationCode(String code, String state) {
   }
 
-  public record Result(String code, String lastLocation, int lastStatusCode) {}
+  public record Result(String code, String lastLocation, int lastStatusCode) {
+  }
 
   /**
    * The bundle the IdP returned from the token-exchange step. {@code refreshToken} and {@code idToken} are nullable;

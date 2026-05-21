@@ -235,10 +235,10 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Sets the handler invoked when no route matches the request path. The handler receives the request and response
-   * just like a route handler; it is responsible for setting an appropriate status (the default 404 behavior is
-   * replaced wholesale). Any prefix middlewares that matched the unmatched path's prefix still run before this
-   * handler is invoked.
+   * Sets the handler invoked when no route matches the request path. The handler receives the request and response just
+   * like a route handler; it is responsible for setting an appropriate status (the default 404 behavior is replaced
+   * wholesale). Any prefix middlewares that matched the unmatched path's prefix still run before this handler is
+   * invoked.
    *
    * @param handler The handler to invoke for unmatched paths.
    * @return This Web instance for chaining.
