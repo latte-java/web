@@ -116,7 +116,7 @@ public class OIDCTestFixture {
    * @param applicationId The OAuth client (application) UUID. Sent as the {@code client_id} on both the authorize
    *                      request and the token-exchange request. The corresponding secret is resolved via
    *                      {@link #clientSecretFor(String)}.
-   * @return The access, refresh, and id tokens (any may be null if the IdP omits them).
+   * @return The access, refresh, and id tokens plus the expiry (any may be null if the IdP omits them).
    * @throws Exception If the OAuth flow or token exchange fails.
    */
   public Tokens login(String email, String password, String applicationId) throws Exception {
@@ -164,7 +164,10 @@ public class OIDCTestFixture {
         webTest.cookies.add(new Cookie(config.refreshTokenCookieName(), refreshToken));
       }
 
-      return new Tokens(accessToken, refreshToken, idToken);
+      JsonNode expires = json.get("expires_in");
+      Long expiresIn = expires != null && !expires.isNull() ? expires.asLong() : null;
+
+      return new Tokens(accessToken, refreshToken, idToken, expiresIn);
     }
   }
 
@@ -246,12 +249,5 @@ public class OIDCTestFixture {
   }
 
   public record Result(String code, String lastLocation, int lastStatusCode) {
-  }
-
-  /**
-   * The bundle the IdP returned from the token-exchange step. {@code refreshToken} and {@code idToken} are nullable;
-   * {@code accessToken} is always present (or {@link #login} would have thrown).
-   */
-  public record Tokens(String accessToken, String refreshToken, String idToken) {
   }
 }

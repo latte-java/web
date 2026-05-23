@@ -26,6 +26,7 @@ public class MockIdP implements AutoCloseable {
   private final String issuer;
   private final int port;
   private final Web web;
+  private volatile MockResponse introspectResponse = new MockResponse(500, null);
   private volatile MockResponse tokenResponse = new MockResponse(500, null);
   private volatile MockResponse userinfoResponse = new MockResponse(500, null);
 
@@ -41,6 +42,7 @@ public class MockIdP implements AutoCloseable {
     web.get("/.well-known/openid-configuration", this::handleDiscovery);
     web.get("/.well-known/jwks.json", this::handleJWKS);
     web.post("/oauth2/token", (_, res) -> writeMock(res, tokenResponse));
+    web.post("/oauth2/introspect", (_, res) -> writeMock(res, introspectResponse));
     web.get("/oauth2/userinfo", (_, res) -> writeMock(res, userinfoResponse));
     web.start(port);
   }
@@ -52,6 +54,10 @@ public class MockIdP implements AutoCloseable {
 
   public String issuer() {
     return issuer;
+  }
+
+  public void onIntrospectEndpoint(int status, String body) {
+    this.introspectResponse = new MockResponse(status, body);
   }
 
   public void onTokenEndpoint(int status, String body) {
@@ -70,6 +76,7 @@ public class MockIdP implements AutoCloseable {
     if (includeUserinfoEndpoint) {
       b.append("\"userinfo_endpoint\":\"").append(issuer).append("/oauth2/userinfo\",");
     }
+    b.append("\"introspection_endpoint\":\"").append(issuer).append("/oauth2/introspect\",");
     b.append("\"jwks_uri\":\"").append(issuer).append("/.well-known/jwks.json\"");
     b.append("}");
     res.setStatus(200);

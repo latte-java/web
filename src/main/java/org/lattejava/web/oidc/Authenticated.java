@@ -114,47 +114,18 @@ public class Authenticated implements Middleware {
       return null;
     }
 
-    Tools.TokenEndpointResponse tokenResponse;
-    try {
-      tokenResponse = refresh(refreshToken);
-    } catch (Exception e) {
+    Tokens result = Tools.refresh(config, refreshToken);
+    if (result == null) {
       return null;
     }
 
-    if (tokenResponse.failed()) {
-      return null;
-    }
-
-    JsonNode body;
-    try {
-      body = Tools.MAPPER.readTree(tokenResponse.body());
-    } catch (Exception e) {
-      return null;
-    }
-
-    String newAccessToken = Tools.textOrNull(body, "access_token");
-    String newRefreshToken = Tools.textOrNull(body, "refresh_token");
-    String newIdToken = Tools.textOrNull(body, "id_token");
-    long expiresIn = body.has("expires_in") ? body.get("expires_in").asLong() : 3600L;
-    if (newAccessToken == null) {
-      return null;
-    }
-
-    TokenValidator.Result revalidated = tokenValidator.validate(newAccessToken, true);
+    TokenValidator.Result revalidated = tokenValidator.validate(result.accessToken(), true);
     if (revalidated instanceof TokenValidator.Result.Valid(JWT jwt)) {
-      Tools.addAuthCookies(req, res, config, newIdToken, newAccessToken, newRefreshToken, expiresIn);
+      long expiresIn = result.expiresIn() != null ? result.expiresIn() : 3600L;
+      Tools.addAuthCookies(req, res, config, result.idToken(), result.accessToken(), result.refreshToken(), expiresIn);
       return jwt;
     }
 
     return null;
-  }
-
-  private Tools.TokenEndpointResponse refresh(String refreshToken) throws IOException, InterruptedException {
-    return Tools.postToken(config,
-        Map.of(
-            "grant_type", "refresh_token",
-            "refresh_token", refreshToken
-        )
-    );
   }
 }

@@ -93,6 +93,34 @@ public class OIDC<U> implements Middleware {
   }
 
   /**
+   * Creates the API authentication middleware. Install once at the common API prefix (e.g. {@code /api}); it validates
+   * the request's access token via introspection, refreshes it reactively, and binds the decoded JWT. Authorization is
+   * applied separately via {@link #apiAuthorized(APIAuthorizer)}.
+   *
+   * @return A new {@link APIAuthenticated} middleware bound to this OpenIDConnect instance.
+   * @throws IllegalStateException If no introspection endpoint is configured (set it explicitly or provide an issuer
+   *                               whose discovery document advertises {@code introspection_endpoint}).
+   */
+  public APIAuthenticated apiAuthenticated() {
+    if (config.introspectionEndpoint() == null) {
+      throw new IllegalStateException("apiAuthenticated() requires an introspection endpoint — set introspectionEndpoint explicitly or provide an issuer whose discovery advertises [introspection_endpoint]");
+    }
+    return new APIAuthenticated(config, jwks);
+  }
+
+  /**
+   * Creates an API authorization middleware that delegates the access decision to the given authorizer. Install
+   * downstream of {@link #apiAuthenticated()} — per sub-API and optionally as a baseline at the API prefix. Authorizers
+   * compose additively along the prefix chain (all must pass).
+   *
+   * @param authorizer The application-supplied access decision.
+   * @return A new {@link APIAuthorized} middleware.
+   */
+  public APIAuthorized apiAuthorized(APIAuthorizer authorizer) {
+    return new APIAuthorized(authorizer);
+  }
+
+  /**
    * @return A new {@link Authenticated} middleware bound to this OpenIDConnect instance.
    */
   public Authenticated authenticated() {
@@ -147,8 +175,10 @@ public class OIDC<U> implements Middleware {
   }
 
   /**
-   * @return A new {@link JWTAuthenticated} middleware bound to this OpenIDConnect instance. Use this for API endpoints
-   *     that share the session cookies with the browser but expect a 401 on failure instead of a login redirect.
+   * @return A new {@link JWTAuthenticated} middleware bound to this OpenIDConnect instance. Use this for browser flows
+   *     (or some API client flows) that call API endpoints using the same cookies that the browser flows use, except
+   *     these flows expect a 401 on failure instead of a login redirect. Specifically, `fetch` and SPA flows will use
+   *     this middleware extensively.
    */
   public JWTAuthenticated jwtAuthenticated() {
     return new JWTAuthenticated(config, jwks);

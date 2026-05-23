@@ -24,10 +24,13 @@ public record OIDCConfig(
     URI userinfoEndpoint,
     URI jwksEndpoint,
     URI logoutEndpoint,
+    URI introspectionEndpoint,
     String clientId,
     String clientSecret,
     List<String> scopes,
     Function<JWT, Set<String>> roleExtractor,
+    TokenExtractor apiTokenExtractor,
+    TokenWriter apiTokenWriter,
     boolean validateAccessToken,
     String errorPage,
     String postLoginPage,
@@ -68,12 +71,15 @@ public record OIDCConfig(
    */
   public static class Builder {
     private String accessTokenCookieName = "access_token";
+    private TokenExtractor apiTokenExtractor = new TokenExtractor.Default();
+    private TokenWriter apiTokenWriter = new TokenWriter.Default();
     private URI authorizeEndpoint;
     private String callbackPath = "/oidc/return";
     private String clientId;
     private String clientSecret;
     private String errorPage = "/";
     private String idTokenCookieName = "id_token";
+    private URI introspectionEndpoint;
     private String issuer;
     private URI jwksEndpoint;
     private String loginPath = "/login";
@@ -97,6 +103,16 @@ public record OIDCConfig(
 
     public Builder accessTokenCookieName(String value) {
       this.accessTokenCookieName = value;
+      return this;
+    }
+
+    public Builder apiTokenExtractor(TokenExtractor value) {
+      this.apiTokenExtractor = value;
+      return this;
+    }
+
+    public Builder apiTokenWriter(TokenWriter value) {
+      this.apiTokenWriter = value;
       return this;
     }
 
@@ -161,6 +177,7 @@ public record OIDCConfig(
 
       Tools.requireSecureURI("issuer", issuer == null ? null : URI.create(issuer));
       Tools.requireSecureURI("authorizeEndpoint", authorizeEndpoint);
+      Tools.requireSecureURI("introspectionEndpoint", introspectionEndpoint);
       Tools.requireSecureURI("jwksEndpoint", jwksEndpoint);
       Tools.requireSecureURI("logoutEndpoint", logoutEndpoint);
       Tools.requireSecureURI("tokenEndpoint", tokenEndpoint);
@@ -178,7 +195,8 @@ public record OIDCConfig(
       }
 
       return new OIDCConfig(issuer, authorizeEndpoint, tokenEndpoint, userinfoEndpoint, jwksEndpoint,
-          logoutEndpoint, clientId, clientSecret, scopes, roleExtractor,
+          logoutEndpoint, introspectionEndpoint, clientId, clientSecret, scopes, roleExtractor,
+          apiTokenExtractor, apiTokenWriter,
           validateAccessToken, errorPage, postLoginPage, postLogout, loginPath, callbackPath, logoutPath,
           logoutReturnPath, stateCookieName, accessTokenCookieName, refreshTokenCookieName,
           idTokenCookieName, returnToCookieName, refreshTokenMaxAge);
@@ -206,6 +224,11 @@ public record OIDCConfig(
 
     public Builder idTokenCookieName(String value) {
       this.idTokenCookieName = value;
+      return this;
+    }
+
+    public Builder introspectionEndpoint(URI value) {
+      this.introspectionEndpoint = value;
       return this;
     }
 
@@ -324,6 +347,10 @@ public record OIDCConfig(
 
       if (logoutEndpoint == null && config.endSessionEndpoint() != null) {
         logoutEndpoint = URI.create(config.endSessionEndpoint());
+      }
+
+      if (introspectionEndpoint == null && config.introspectionEndpoint() != null) {
+        introspectionEndpoint = URI.create(config.introspectionEndpoint());
       }
     }
   }

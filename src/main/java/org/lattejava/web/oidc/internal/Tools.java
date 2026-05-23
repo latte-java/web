@@ -149,6 +149,46 @@ public class Tools {
   }
 
   /**
+   * Exchanges a refresh token for a fresh token set at the configured token endpoint, parsing the response. This is the
+   * transport-agnostic core shared by the cookie flow ({@code Authenticated}) and the API flow
+   * ({@code APIAuthenticated}); writing the new tokens back (cookies vs. headers) is left to the caller.
+   *
+   * @param config       The OIDC configuration.
+   * @param refreshToken The refresh token to exchange.
+   * @return The parsed {@link Tokens} on success, or {@code null} on any thrown exception, non-2xx response,
+   *     unparseable body, or a response missing {@code access_token}.
+   */
+  public static Tokens refresh(OIDCConfig config, String refreshToken) {
+    TokenEndpointResponse tokenResponse;
+    try {
+      tokenResponse = postToken(config, Map.of("grant_type", "refresh_token", "refresh_token", refreshToken));
+    } catch (Exception e) {
+      return null;
+    }
+
+    if (tokenResponse.failed()) {
+      return null;
+    }
+
+    JsonNode body;
+    try {
+      body = MAPPER.readTree(tokenResponse.body());
+    } catch (Exception e) {
+      return null;
+    }
+
+    String accessToken = textOrNull(body, "access_token");
+    if (accessToken == null) {
+      return null;
+    }
+
+    String refreshTokenOut = textOrNull(body, "refresh_token");
+    String idToken = textOrNull(body, "id_token");
+    Long expiresIn = body.has("expires_in") ? body.get("expires_in").asLong() : null;
+    return new Tokens(accessToken, refreshTokenOut, idToken, expiresIn);
+  }
+
+  /**
    * Enforces that the URI uses HTTPS, except when the host is a loopback address. This makes local development with
    * {@code http://localhost:9010} (etc.) workable without undermining production security posture.
    */
