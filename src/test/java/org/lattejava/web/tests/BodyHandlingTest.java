@@ -225,7 +225,7 @@ public class BodyHandlingTest extends BaseWebTest {
 
       HttpResponse<String> response = sendWithBody("POST", "/validated", "anything");
       assertEquals(response.statusCode(), 400);
-      assertEquals(response.body(), "body was rejected");
+      assertEquals(response.body(), "{\"error\":\"BadRequestException\", \"message\":\"body was rejected\"}");
       assertNull(response.headers().firstValue("X-Handler-Ran").orElse(null));
     }
   }

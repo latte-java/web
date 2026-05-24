@@ -27,7 +27,7 @@ public class ExceptionHandlerTest extends BaseWebTest {
 
       HttpResponse<String> response = send("GET", "/bad");
       assertEquals(response.statusCode(), 400);
-      assertEquals(response.body(), "nope");
+      assertEquals(response.body(), "{\"error\":\"BadRequestException\", \"message\":\"nope\"}");
     }
   }
 
@@ -42,7 +42,7 @@ public class ExceptionHandlerTest extends BaseWebTest {
 
       HttpResponse<String> response = send("GET", "/forbidden");
       assertEquals(response.statusCode(), 403);
-      assertEquals(response.body(), "denied");
+      assertEquals(response.body(), "{\"error\":\"ForbiddenException\", \"message\":\"denied\"}");
     }
   }
 
@@ -92,7 +92,7 @@ public class ExceptionHandlerTest extends BaseWebTest {
       // A type without a per-type renderer still falls through to the default renderer.
       HttpResponse<String> bad = send("GET", "/bad");
       assertEquals(bad.statusCode(), 400);
-      assertEquals(bad.body(), "falls through to default");
+      assertEquals(bad.body(), "{\"error\":\"BadRequestException\", \"message\":\"falls through to default\"}");
     }
   }
 
