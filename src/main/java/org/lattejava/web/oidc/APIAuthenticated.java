@@ -20,9 +20,10 @@ import module org.lattejava.web;
  * introspection response, carries the claims; introspection is purely a validity/revocation gate.
  * <p>
  * Authorization (whether the token may call a given API) is delegated separately to {@link APIAuthorized}. Failures are
- * communicated as status codes (no redirects): {@code 401} for a missing/invalid token that cannot be refreshed,
- * {@code 503} when introspection cannot reach the IdP, and {@code 403} (from {@link APIAuthorized}) when the authorizer
- * denies the request.
+ * communicated by throwing (no redirects): {@link UnauthenticatedException} (401) for a missing/invalid token that
+ * cannot be refreshed, and {@link ServiceUnavailableException} (503) when introspection cannot reach the IdP.
+ * {@link APIAuthorized} throws {@link ForbiddenException} (403) when the authorizer denies the request. The framework
+ * renders these via its baseline handling or any installed {@link org.lattejava.web.middleware.ExceptionHandler}.
  *
  * @author Brian Pontarelli
  */
@@ -42,27 +43,23 @@ public class APIAuthenticated implements Middleware {
     Tokens tokens = config.apiTokenExtractor().extract(req);
     String accessToken = tokens.accessToken();
     if (accessToken == null) {
-      res.setStatus(401);
-      return;
+      throw new UnauthenticatedException("No access token was presented");
     }
 
     TokenValidator.IntrospectionResult result = tokenValidator.introspect(accessToken);
     if (result instanceof TokenValidator.IntrospectionResult.NetworkError) {
-      res.setStatus(503);
-      return;
+      throw new ServiceUnavailableException("The identity provider could not be reached to validate the access token");
     }
 
     if (result instanceof TokenValidator.IntrospectionResult.Inactive) {
       String refreshToken = tokens.refreshToken();
       if (refreshToken == null) {
-        res.setStatus(401);
-        return;
+        throw new UnauthenticatedException("The access token is inactive and no refresh token was presented");
       }
 
       Tokens refreshed = Tools.refresh(config, refreshToken);
       if (refreshed == null) {
-        res.setStatus(401);
-        return;
+        throw new UnauthenticatedException("The access token is inactive and could not be refreshed");
       }
 
       // The refreshed access token came directly from the IdP, so it is trusted without re-introspection.
@@ -74,8 +71,7 @@ public class APIAuthenticated implements Middleware {
     try {
       jwt = JWT.decode(accessToken, jwks);
     } catch (Exception e) {
-      res.setStatus(401);
-      return;
+      throw new UnauthenticatedException("The access token could not be decoded", e);
     }
 
     ScopedValue.where(Tools.CURRENT_JWT, jwt).call(() -> {

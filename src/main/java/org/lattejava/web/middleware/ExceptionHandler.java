@@ -9,36 +9,75 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * A middleware that catches exceptions thrown by downstream middlewares or handlers and maps them to HTTP status codes
- * using a caller-supplied mapping.
+ * A middleware that catches exceptions thrown by downstream middlewares or handlers and renders an HTTP error response.
  * <p>
- * When an exception is caught, the middleware walks the exception's class hierarchy (from most specific to most
- * general) and uses the first matching entry. If no entry matches, the exception is re-thrown so the HTTP server's
- * default handling (typically a 500) applies.
+ * Rendering is resolved in two steps. First, the middleware walks the caught exception's class hierarchy (most specific
+ * to most general) looking for a registered per-type {@link ErrorRenderer}; if one matches, it renders the response.
+ * Otherwise, if the exception is an {@link HTTPException}, the {@linkplain #ExceptionHandler(ErrorRenderer) default
+ * renderer} handles it (reading the carried status and writing the message). Any other exception is re-thrown so the
+ * HTTP server's default handling (typically a 500) applies — this keeps unexpected exceptions visible rather than
+ * masking them behind a generic error body.
  * <p>
- * By default this middleware sets the status code but writes no response body. Subclasses can override
- * {@link #writeBody(HTTPRequest, HTTPResponse, Exception, int)} to emit an error payload (for example, a JSON error
- * document), or override {@link #lookupStatus(Class)} to change the status-resolution strategy.
+ * Each {@link ErrorRenderer} owns the entire response for its exception: it sets the status and writes the body. To
+ * catch every exception (including non-{@code HTTPException} types), register a renderer against {@link Exception} or
+ * {@link Throwable}.
  *
  * @author Brian Pontarelli
  */
 public class ExceptionHandler implements Middleware {
-  private static final Map<Class<? extends Throwable>, Integer> DEFAULT_STATUS_BY_EXCEPTION =
-      Map.of(UnauthenticatedException.class, 401);
+  /**
+   * The default renderer used for any {@link HTTPException} that has no more-specific renderer. It sets the status from
+   * {@link HTTPException#status()} and, when the exception has a message, writes it as the response body. For any other
+   * exception it sets a {@code 500} status.
+   */
+  public static final ErrorRenderer DEFAULT_RENDERER = (_, res, e) -> {
+    int status = (e instanceof HTTPException he) ? he.status() : 500;
+    res.setStatus(status);
+    String message = e.getMessage();
+    if (message != null) {
+      res.getWriter().write(message);
+    }
+  };
 
-  protected final Map<Class<? extends Throwable>, Integer> statusByException;
+  protected final ErrorRenderer defaultRenderer;
+  protected final Map<Class<? extends Throwable>, ErrorRenderer> renderersByException;
 
   /**
-   * Constructs an ExceptionMiddleware with the given mapping. Any entry in {@code statusByException} overrides the
-   * built-in defaults. Built-in defaults: {@link UnauthenticatedException} maps to {@code 401}.
-   *
-   * @param statusByException A map from exception class to HTTP status code. The map is defensively copied and merged
-   *                          with built-in defaults (user-supplied entries win).
+   * Constructs an ExceptionHandler with the {@link #DEFAULT_RENDERER} and no per-type renderers.
    */
-  public ExceptionHandler(Map<Class<? extends Throwable>, Integer> statusByException) {
-    Map<Class<? extends Throwable>, Integer> merged = new HashMap<>(DEFAULT_STATUS_BY_EXCEPTION);
-    merged.putAll(statusByException);
-    this.statusByException = Map.copyOf(merged);
+  public ExceptionHandler() {
+    this(DEFAULT_RENDERER, Map.of());
+  }
+
+  /**
+   * Constructs an ExceptionHandler with the given default renderer and no per-type renderers.
+   *
+   * @param defaultRenderer The renderer used for any {@link HTTPException} without a more-specific renderer.
+   */
+  public ExceptionHandler(ErrorRenderer defaultRenderer) {
+    this(defaultRenderer, Map.of());
+  }
+
+  /**
+   * Constructs an ExceptionHandler with the {@link #DEFAULT_RENDERER} and the given per-type renderers.
+   *
+   * @param renderersByException A map from exception class to the renderer that handles it. The map is defensively
+   *                             copied.
+   */
+  public ExceptionHandler(Map<Class<? extends Throwable>, ErrorRenderer> renderersByException) {
+    this(DEFAULT_RENDERER, renderersByException);
+  }
+
+  /**
+   * Constructs an ExceptionHandler with the given default renderer and per-type renderers.
+   *
+   * @param defaultRenderer      The renderer used for any {@link HTTPException} without a more-specific renderer.
+   * @param renderersByException A map from exception class to the renderer that handles it. The map is defensively
+   *                             copied.
+   */
+  public ExceptionHandler(ErrorRenderer defaultRenderer, Map<Class<? extends Throwable>, ErrorRenderer> renderersByException) {
+    this.defaultRenderer = defaultRenderer;
+    this.renderersByException = Map.copyOf(renderersByException);
   }
 
   @Override
@@ -46,46 +85,34 @@ public class ExceptionHandler implements Middleware {
     try {
       chain.next(req, res);
     } catch (Exception e) {
-      Integer status = lookupStatus(e.getClass());
-      if (status == null) {
+      ErrorRenderer renderer = resolveRenderer(e.getClass());
+      if (renderer != null) {
+        renderer.render(req, res, e);
+      } else if (e instanceof HTTPException) {
+        defaultRenderer.render(req, res, e);
+      } else {
         throw e;
       }
-      res.setStatus(status);
-      writeBody(req, res, e, status);
     }
   }
 
   /**
-   * Looks up the status code for the given exception class, walking up the class hierarchy until a match is found in
-   * {@link #statusByException} or the walk reaches {@code Object}. Subclasses may override this to change the
+   * Resolves the per-type renderer for the given exception class, walking up the class hierarchy until a match is found
+   * in {@link #renderersByException} or the walk reaches {@code Object}. Subclasses may override this to change the
    * resolution strategy.
    *
    * @param type The exception class.
-   * @return The mapped status code, or {@code null} if no mapping applies (in which case the exception will propagate).
+   * @return The matching renderer, or {@code null} if none is registered for the class or any of its supertypes.
    */
-  protected Integer lookupStatus(Class<?> type) {
+  protected ErrorRenderer resolveRenderer(Class<?> type) {
     Class<?> c = type;
     while (c != null && c != Object.class) {
-      Integer status = statusByException.get(c);
-      if (status != null) {
-        return status;
+      ErrorRenderer renderer = renderersByException.get(c);
+      if (renderer != null) {
+        return renderer;
       }
       c = c.getSuperclass();
     }
     return null;
-  }
-
-  /**
-   * Called after the response status has been set in response to a mapped exception. The default implementation writes
-   * nothing. Subclasses may override to emit an error body (JSON, HTML, etc.). Any exception thrown from this method
-   * will propagate out of the middleware chain.
-   *
-   * @param req       The request.
-   * @param res       The response; the status has already been set.
-   * @param exception The caught exception that was mapped.
-   * @param status    The status code that was mapped.
-   */
-  protected void writeBody(HTTPRequest req, HTTPResponse res, Exception exception, int status) throws Exception {
-    // Default: no body.
   }
 }

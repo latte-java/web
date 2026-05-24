@@ -36,13 +36,19 @@ public class JSONBodySupplierTest extends BaseWebTest {
   }
 
   @Test
-  public void jsonBodySupplier_emptyBody_returns400() throws Exception {
+  public void jsonBodySupplier_emptyBody_invokesHandlerWithNullBody() throws Exception {
+    // An empty body is not a parse failure: the supplier returns null and the handler is invoked with a null body,
+    // leaving it to decide whether a missing body is acceptable.
     try (var web = new Web()) {
-      web.post("/users", (_, res, _) -> res.setStatus(200), JSONBodySupplier.of(User.class));
+      web.post("/users", (_, res, user) -> {
+        res.setStatus(200);
+        res.setHeader("X-Body-Null", String.valueOf(user == null));
+      }, JSONBodySupplier.of(User.class));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("");
-      assertEquals(response.statusCode(), 400);
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.headers().firstValue("X-Body-Null").orElse(null), "true");
     }
   }
 

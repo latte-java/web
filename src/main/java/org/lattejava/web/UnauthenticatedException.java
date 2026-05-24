@@ -5,18 +5,22 @@
 package org.lattejava.web;
 
 /**
- * Thrown when code attempts to access the request-scoped authenticated identity but no identity is bound — typically
- * because the route is not protected by an OIDC middleware or the middleware hasn't run yet. Default-mapped to 401 by
- * {@link org.lattejava.web.middleware.ExceptionHandler}.
+ * An {@link HTTPException} that maps to {@code 401 Unauthorized}. Thrown when a request lacks valid authentication —
+ * for example, when code attempts to access the request-scoped authenticated identity but no identity is bound, or when
+ * an API request carries a missing/invalid token that cannot be refreshed.
  *
  * @author Brian Pontarelli
  */
-public class UnauthenticatedException extends RuntimeException {
+public class UnauthenticatedException extends HTTPException {
   public UnauthenticatedException() {
-    super("No authenticated identity is bound to the current request");
+    super(401, "No authenticated identity is bound to the current request");
   }
 
   public UnauthenticatedException(String message) {
-    super(message);
+    super(401, message);
+  }
+
+  public UnauthenticatedException(String message, Throwable cause) {
+    super(401, message, cause);
   }
 }

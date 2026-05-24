@@ -436,11 +436,9 @@ public class Web implements AutoCloseable {
     Objects.requireNonNull(bodyHandler, "bodyHandler cannot be null");
     Objects.requireNonNull(supplier, "supplier cannot be null");
     Handler adapted = (req, res) -> {
+      // The supplier throws to signal a parse failure; a null return means an empty (but valid) body, which the
+      // handler is given a chance to handle.
       T body = supplier.get(req, res);
-      if (body == null) {
-        // Supplier signalled a handled error (e.g., set 400 status and returned null)
-        return;
-      }
       bodyHandler.handle(req, res, body);
     };
     return route(methods, pathSpec, adapted, middlewares);
@@ -517,6 +515,17 @@ public class Web implements AutoCloseable {
   }
 
   private void handleRequest(HTTPRequest request, HTTPResponse response) throws Exception {
+    try {
+      dispatch(request, response);
+    } catch (HTTPException e) {
+      // Baseline safety net: render any uncaught HTTPException so framework failures (e.g. a body that fails to parse)
+      // produce their carried status without requiring an ExceptionHandler to be installed. A user-installed
+      // ExceptionHandler runs inside the chain and gets first crack; this only handles what reaches the top.
+      ExceptionHandler.DEFAULT_RENDERER.render(request, response, e);
+    }
+  }
+
+  private void dispatch(HTTPRequest request, HTTPResponse response) throws Exception {
     String path = request.getPath();
     String method = request.getMethod().name();
     RouteTrie.Outcome outcome = trie.match(path, method);

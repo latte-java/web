@@ -17,25 +17,94 @@ import static org.testng.Assert.*;
 public class ExceptionHandlerTest extends BaseWebTest {
 
   @Test
-  public void exceptionMiddleware_globalInstall_mapsExceptionForAnyRoute() throws Exception {
+  public void defaultRenderer_rendersHTTPExceptionStatusAndMessage() throws Exception {
     try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(NotFoundException.class, 404)));
-      web.get("/missing", (_, _) -> {
-        throw new NotFoundException("not here");
+      web.install(new ExceptionHandler());
+      web.get("/bad", (_, _) -> {
+        throw new BadRequestException("nope");
       });
       web.start(PORT);
 
-      HttpResponse<String> response = send("GET", "/missing");
-      assertEquals(response.statusCode(), 404);
+      HttpResponse<String> response = send("GET", "/bad");
+      assertEquals(response.statusCode(), 400);
+      assertEquals(response.body(), "nope");
     }
   }
 
   @Test
-  public void exceptionMiddleware_mapsThrownException() throws Exception {
+  public void defaultRenderer_usesCarriedStatusForSubtypes() throws Exception {
     try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(IllegalArgumentException.class, 400)));
+      web.install(new ExceptionHandler());
+      web.get("/forbidden", (_, _) -> {
+        throw new ForbiddenException("denied");
+      });
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/forbidden");
+      assertEquals(response.statusCode(), 403);
+      assertEquals(response.body(), "denied");
+    }
+  }
+
+  @Test
+  public void customDefaultRenderer_rendersAllHTTPExceptions() throws Exception {
+    ErrorRenderer json = (_, res, e) -> {
+      int status = ((HTTPException) e).status();
+      res.setStatus(status);
+      res.setHeader("Content-Type", "application/json");
+      res.getWriter().write("{\"status\":" + status + ",\"error\":\"" + e.getMessage() + "\"}");
+    };
+
+    try (var web = new Web()) {
+      web.install(new ExceptionHandler(json));
       web.get("/bad", (_, _) -> {
-        throw new IllegalArgumentException("nope");
+        throw new BadRequestException("bad input");
+      });
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/bad");
+      assertEquals(response.statusCode(), 400);
+      assertEquals(response.body(), "{\"status\":400,\"error\":\"bad input\"}");
+    }
+  }
+
+  @Test
+  public void perTypeRenderer_overridesDefaultForThatType() throws Exception {
+    ErrorRenderer fieldErrors = (_, res, _) -> {
+      res.setStatus(422);
+      res.getWriter().write("field errors");
+    };
+
+    try (var web = new Web()) {
+      web.install(new ExceptionHandler(Map.of(ValidationException.class, fieldErrors)));
+      web.get("/validate", (_, _) -> {
+        throw new ValidationException();
+      });
+      web.get("/bad", (_, _) -> {
+        throw new BadRequestException("falls through to default");
+      });
+      web.start(PORT);
+
+      HttpResponse<String> validate = send("GET", "/validate");
+      assertEquals(validate.statusCode(), 422);
+      assertEquals(validate.body(), "field errors");
+
+      // A type without a per-type renderer still falls through to the default renderer.
+      HttpResponse<String> bad = send("GET", "/bad");
+      assertEquals(bad.statusCode(), 400);
+      assertEquals(bad.body(), "falls through to default");
+    }
+  }
+
+  @Test
+  public void perTypeRenderer_handlesForeignExceptionWithStatus() throws Exception {
+    // A non-HTTPException can be mapped by registering a renderer that sets the status itself.
+    ErrorRenderer badRequest = (_, res, _) -> res.setStatus(400);
+
+    try (var web = new Web()) {
+      web.install(new ExceptionHandler(Map.of(IllegalArgumentException.class, badRequest)));
+      web.get("/bad", (_, _) -> {
+        throw new IllegalArgumentException("foreign");
       });
       web.start(PORT);
 
@@ -45,14 +114,16 @@ public class ExceptionHandlerTest extends BaseWebTest {
   }
 
   @Test
-  public void exceptionMiddleware_mostSpecificMappingWins() throws Exception {
+  public void perTypeRenderer_mostSpecificMappingWins() throws Exception {
+    ErrorRenderer runtime = (_, res, _) -> res.setStatus(500);
+    ErrorRenderer iae = (_, res, _) -> res.setStatus(400);
+
     try (var web = new Web()) {
-      // Map both RuntimeException (500) and IllegalArgumentException (400).
-      // When IAE is thrown, the 400 mapping should win because it's more specific.
-      web.install(new ExceptionHandler(Map.of(
-          RuntimeException.class, 500,
-          IllegalArgumentException.class, 400
-      )));
+      // IllegalArgumentException is more specific than RuntimeException; its renderer should win.
+      Map<Class<? extends Throwable>, ErrorRenderer> renderers = new HashMap<>();
+      renderers.put(RuntimeException.class, runtime);
+      renderers.put(IllegalArgumentException.class, iae);
+      web.install(new ExceptionHandler(renderers));
       web.get("/specific", (_, _) -> {
         throw new IllegalArgumentException("specific");
       });
@@ -64,9 +135,40 @@ public class ExceptionHandlerTest extends BaseWebTest {
   }
 
   @Test
-  public void exceptionMiddleware_noExceptionPassesThrough() throws Exception {
+  public void perTypeRenderer_walksUpHierarchy() throws Exception {
+    ErrorRenderer runtime = (_, res, _) -> res.setStatus(500);
+
     try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(RuntimeException.class, 500)));
+      web.install(new ExceptionHandler(Map.of(RuntimeException.class, runtime)));
+      web.get("/subclass", (_, _) -> {
+        throw new IllegalStateException("subclass of RuntimeException");
+      });
+      web.start(PORT);
+
+      HttpResponse<String> response = send("GET", "/subclass");
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  @Test
+  public void unmappedForeignException_propagates() throws Exception {
+    try (var web = new Web()) {
+      web.install(new ExceptionHandler(Map.of(IllegalStateException.class, (_, res, _) -> res.setStatus(400))));
+      web.get("/unmapped", (_, _) -> {
+        throw new RuntimeException("unmapped");
+      });
+      web.start(PORT);
+
+      // RuntimeException is neither registered nor an HTTPException; HTTPServer default handling returns 500.
+      HttpResponse<String> response = send("GET", "/unmapped");
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  @Test
+  public void noExceptionPassesThrough() throws Exception {
+    try (var web = new Web()) {
+      web.install(new ExceptionHandler());
       web.get("/ok", (_, res) -> res.setStatus(200));
       web.start(PORT);
 
@@ -76,13 +178,12 @@ public class ExceptionHandlerTest extends BaseWebTest {
   }
 
   @Test
-  public void exceptionMiddleware_subclassCanOverrideLookupStatus() throws Exception {
-    // A subclass overrides lookupStatus() to compute the status dynamically.
+  public void subclassCanOverrideResolveRenderer() throws Exception {
+    // A subclass overrides resolveRenderer() to compute the renderer dynamically.
     var middleware = new ExceptionHandler(Map.of()) {
       @Override
-      protected Integer lookupStatus(Class<?> type) {
-        // Any exception whose class name contains "NotFound" → 404; everything else falls through
-        return type.getSimpleName().contains("NotFound") ? 404 : null;
+      protected ErrorRenderer resolveRenderer(Class<?> type) {
+        return type.getSimpleName().contains("NotFound") ? (_, res, _) -> res.setStatus(404) : null;
       }
     };
 
@@ -98,65 +199,12 @@ public class ExceptionHandlerTest extends BaseWebTest {
     }
   }
 
-  @Test
-  public void exceptionMiddleware_subclassCanWriteBody() throws Exception {
-    // A subclass overrides writeBody() to emit a response body for mapped exceptions.
-    var middleware = new ExceptionHandler(Map.of(IllegalArgumentException.class, 400)) {
-      @Override
-      protected void writeBody(HTTPRequest req, HTTPResponse res, Exception exception, int status) throws Exception {
-        res.setHeader("X-Error-Class", exception.getClass().getSimpleName());
-        res.setHeader("X-Error-Status", String.valueOf(status));
-        res.getWriter().write("error: " + exception.getMessage());
-      }
-    };
-
-    try (var web = new Web()) {
-      web.install(middleware);
-      web.get("/err", (_, _) -> {
-        throw new IllegalArgumentException("bad input");
-      });
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/err");
-      assertEquals(response.statusCode(), 400);
-      assertEquals(response.headers().firstValue("X-Error-Class").orElse(null), "IllegalArgumentException");
-      assertEquals(response.headers().firstValue("X-Error-Status").orElse(null), "400");
-      assertEquals(response.body(), "error: bad input");
-    }
-  }
-
-  @Test
-  public void exceptionMiddleware_subclassWalksUpHierarchy() throws Exception {
-    try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(RuntimeException.class, 500)));
-      web.get("/subclass", (_, _) -> {
-        throw new IllegalStateException("subclass of RuntimeException");
-      });
-      web.start(PORT);
-
-      HttpResponse<String> response = send("GET", "/subclass");
-      assertEquals(response.statusCode(), 500);
-    }
-  }
-
-  @Test
-  public void exceptionMiddleware_unmappedExceptionPropagates() throws Exception {
-    try (var web = new Web()) {
-      web.install(new ExceptionHandler(Map.of(IllegalStateException.class, 400)));
-      web.get("/unmapped", (_, _) -> {
-        throw new RuntimeException("unmapped");
-      });
-      web.start(PORT);
-
-      // RuntimeException isn't mapped; HTTPServer default handling returns 500
-      HttpResponse<String> response = send("GET", "/unmapped");
-      assertEquals(response.statusCode(), 500);
-    }
-  }
-
   static class NotFoundException extends RuntimeException {
     NotFoundException(String message) {
       super(message);
     }
+  }
+
+  static class ValidationException extends RuntimeException {
   }
 }

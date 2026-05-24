@@ -192,15 +192,32 @@ public class BodyHandlingTest extends BaseWebTest {
   }
 
   @Test
-  public void body_supplierReturnsNull_handlerNotCalled() throws Exception {
+  public void body_supplierReturnsNull_handlerCalledWithNullBody() throws Exception {
+    // A supplier returning null signals an empty (but valid) body; the handler is invoked with a null body and decides
+    // whether that is acceptable.
     try (var web = new Web()) {
-      BodySupplier<String> rejectingSupplier = (_, res) -> {
-        res.setStatus(400);
-        res.setHeader("X-Rejected", "yes");
-        return null;
+      BodySupplier<String> emptySupplier = (_, _) -> null;
+      web.post("/validated", (_, res, body) -> {
+        res.setStatus(200);
+        res.setHeader("X-Body-Null", String.valueOf(body == null));
+      }, emptySupplier);
+      web.start(PORT);
+
+      HttpResponse<String> response = sendWithBody("POST", "/validated", "anything");
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.headers().firstValue("X-Body-Null").orElse(null), "true");
+    }
+  }
+
+  @Test
+  public void body_supplierThrowsHTTPException_renderedBySafetyNet() throws Exception {
+    // A supplier that throws an HTTPException is rendered by the framework's baseline safety net (its carried status and
+    // message) even when no ExceptionHandler is installed, and the handler is not invoked.
+    try (var web = new Web()) {
+      BodySupplier<String> rejectingSupplier = (_, _) -> {
+        throw new BadRequestException("body was rejected");
       };
       web.post("/validated", (_, res, _) -> {
-        // Should never be invoked
         res.setStatus(200);
         res.setHeader("X-Handler-Ran", "yes");
       }, rejectingSupplier);
@@ -208,7 +225,7 @@ public class BodyHandlingTest extends BaseWebTest {
 
       HttpResponse<String> response = sendWithBody("POST", "/validated", "anything");
       assertEquals(response.statusCode(), 400);
-      assertEquals(response.headers().firstValue("X-Rejected").orElse(null), "yes");
+      assertEquals(response.body(), "body was rejected");
       assertNull(response.headers().firstValue("X-Handler-Ran").orElse(null));
     }
   }

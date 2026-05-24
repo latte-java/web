@@ -16,8 +16,8 @@ import module org.lattejava.web;
  * all must pass. A baseline at {@code /api} therefore always applies, and sub-APIs add finer checks on top of it.
  * <p>
  * It does not authenticate. A request that reaches it without a bound JWT is a configuration error
- * ({@link APIAuthenticated} was not installed upstream) and gets {@code 401}; a bound request that the authorizer
- * rejects gets {@code 403}.
+ * ({@link APIAuthenticated} was not installed upstream) and throws {@link UnauthenticatedException} (401); a bound
+ * request that the authorizer rejects throws {@link ForbiddenException} (403).
  *
  * @author Brian Pontarelli
  */
@@ -35,8 +35,7 @@ public class APIAuthorized implements Middleware {
   public void handle(HTTPRequest req, HTTPResponse res, MiddlewareChain chain) throws Exception {
     // No bound JWT means APIAuthenticated never ran upstream — fail closed.
     if (!Tools.CURRENT_JWT.isBound()) {
-      res.setStatus(401);
-      return;
+      throw new UnauthenticatedException("No authenticated identity is bound; APIAuthenticated must run upstream");
     }
 
     if (authorizer.authorize(req, Tools.CURRENT_JWT.get())) {
@@ -44,6 +43,6 @@ public class APIAuthorized implements Middleware {
       return;
     }
 
-    res.setStatus(403);
+    throw new ForbiddenException("The authorizer denied access to this resource");
   }
 }
