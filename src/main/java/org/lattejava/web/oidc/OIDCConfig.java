@@ -29,6 +29,7 @@ public record OIDCConfig(
     String clientSecret,
     List<String> scopes,
     Function<JWT, Set<String>> roleExtractor,
+    String apiAudience,
     TokenExtractor apiTokenExtractor,
     TokenWriter apiTokenWriter,
     boolean validateAccessToken,
@@ -71,6 +72,7 @@ public record OIDCConfig(
    */
   public static class Builder {
     private String accessTokenCookieName = "access_token";
+    private String apiAudience;
     private TokenExtractor apiTokenExtractor = new TokenExtractor.Default();
     private TokenWriter apiTokenWriter = new TokenWriter.Default();
     private URI authorizeEndpoint;
@@ -103,6 +105,11 @@ public record OIDCConfig(
 
     public Builder accessTokenCookieName(String value) {
       this.accessTokenCookieName = value;
+      return this;
+    }
+
+    public Builder apiAudience(String value) {
+      this.apiAudience = value;
       return this;
     }
 
@@ -190,13 +197,13 @@ public record OIDCConfig(
         throw new IllegalStateException("Required endpoint unresolved — set issuer or provide explicit authorize/token/jwks endpoints");
       }
 
-      if (!validateAccessToken && userinfoEndpoint == null) {
-        throw new IllegalStateException("validateAccessToken=false requires userinfoEndpoint — set explicitly or provide issuer for discovery");
+      if (!validateAccessToken && introspectionEndpoint == null) {
+        throw new IllegalStateException("validateAccessToken=false requires introspectionEndpoint — set explicitly or provide issuer for discovery");
       }
 
       return new OIDCConfig(issuer, authorizeEndpoint, tokenEndpoint, userinfoEndpoint, jwksEndpoint,
           logoutEndpoint, introspectionEndpoint, clientId, clientSecret, scopes, roleExtractor,
-          apiTokenExtractor, apiTokenWriter,
+          apiAudience, apiTokenExtractor, apiTokenWriter,
           validateAccessToken, errorPage, postLoginPage, postLogout, loginPath, callbackPath, logoutPath,
           logoutReturnPath, stateCookieName, accessTokenCookieName, refreshTokenCookieName,
           idTokenCookieName, returnToCookieName, refreshTokenMaxAge);

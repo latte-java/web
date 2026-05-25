@@ -20,12 +20,14 @@ public class TokenValidator {
   }
 
   /**
-   * Validates a token against the IdP's RFC 7662 introspection endpoint. Used purely as a validity/revocation gate for
-   * API authentication — the response claims are ignored; callers source claims by decoding the access token as a JWT.
+   * Validates a token against the IdP's RFC 7662 introspection endpoint. The {@link IntrospectionResult.Active} result
+   * carries a {@link JWT} built from the introspection response claims. Callers that decode the access token themselves
+   * (the API authentication path) ignore those claims and use introspection purely as a validity/revocation gate;
+   * the opaque-access-token cookie path uses them as its only claims source.
    *
    * @param token The token to introspect.
-   * @return {@link IntrospectionResult.Active} when the IdP reports {@code active=true}; {@link
-   *     IntrospectionResult.Inactive} when it reports inactive or returns a non-5xx error; {@link
+   * @return {@link IntrospectionResult.Active} (carrying the response claims) when the IdP reports {@code active=true};
+   *     {@link IntrospectionResult.Inactive} when it reports inactive or returns a non-5xx error; {@link
    *     IntrospectionResult.NetworkError} on a 5xx response or a thrown exception.
    */
   public IntrospectionResult introspect(String token) {
@@ -52,7 +54,7 @@ public class TokenValidator {
       JsonNode json = Tools.MAPPER.readTree(res.body());
       JsonNode active = json.get("active");
       if (active != null && active.asBoolean(false)) {
-        return new IntrospectionResult.Active();
+        return new IntrospectionResult.Active(Tools.jsonToJWT(json));
       }
 
       return new IntrospectionResult.Inactive();
@@ -72,28 +74,25 @@ public class TokenValidator {
       }
     }
 
-    // This branch is `accessToken=true AND validateAccessToken=false`, so we can use userinfo
-    try {
-      HttpRequest req = HttpRequest.newBuilder(config.userinfoEndpoint())
-                                   .header("Authorization", "Bearer " + token)
-                                   .GET()
-                                   .build();
-      HttpResponse<String> res = Tools.HTTP.send(req, HttpResponse.BodyHandlers.ofString());
-      int status = res.statusCode();
-      if (status == 200) {
-        JsonNode json = Tools.MAPPER.readTree(res.body());
-        var jwt = Tools.userinfoToJWT(json);
-        return new Result.Valid(jwt);
-      }
-
-      if (status >= 500 && status <= 599) {
-        return new Result.NetworkError();
-      }
-
-      return new Result.Invalid();
-    } catch (Exception e) {
+    // This branch is `accessToken=true AND validateAccessToken=false`: the access token is opaque and cannot be decoded
+    // locally, so we ask the IdP via RFC 7662 introspection. The introspection response is the only claims source and
+    // it supplies the `aud` claim for the audience check.
+    IntrospectionResult result = introspect(token);
+    if (result instanceof IntrospectionResult.NetworkError) {
       return new Result.NetworkError();
     }
+
+    if (result instanceof IntrospectionResult.Active(JWT jwt)) {
+      try {
+        validateJWT(jwt);
+      } catch (Exception e) {
+        return new Result.Invalid();
+      }
+
+      return new Result.Valid(jwt);
+    }
+
+    return new Result.Invalid();
   }
 
   private void validateJWT(JWT jwt) {
@@ -103,11 +102,12 @@ public class TokenValidator {
   }
 
   /**
-   * Outcome of a call to the introspection endpoint. Carries no claims — introspection is a pure validity gate.
+   * Outcome of a call to the introspection endpoint. {@link Active} carries the claims parsed from the introspection
+   * response; the gate-only API path ignores them while the opaque-token path uses them as its claims source.
    */
   public sealed interface IntrospectionResult
       permits IntrospectionResult.Active, IntrospectionResult.Inactive, IntrospectionResult.NetworkError {
-    record Active() implements IntrospectionResult {
+    record Active(JWT jwt) implements IntrospectionResult {
     }
 
     record Inactive() implements IntrospectionResult {
@@ -118,7 +118,7 @@ public class TokenValidator {
   }
 
   /**
-   * Outcome of a call to the userinfo endpoint.
+   * Outcome of a token validation — JWKS decode (JWT mode) or RFC 7662 introspection (opaque mode).
    */
   public sealed interface Result permits Result.Invalid, Result.NetworkError, Result.Valid {
     record Invalid() implements Result {

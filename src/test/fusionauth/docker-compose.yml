@@ -48,7 +48,7 @@ services:
       retries: 5
     restart: unless-stopped
     ports:
-      - 9010:9011
+      - 9012:9011
     volumes:
       - fusionauth_config:/usr/local/fusionauth/config
       - ${FUSIONAUTH_LOCAL_KICKSTART_DIRECTORY}:/usr/local/fusionauth/kickstart

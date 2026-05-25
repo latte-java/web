@@ -15,8 +15,10 @@ import module org.lattejava.web;
  * authenticated requests bind the current JWT to the {@link OIDC} ScopedValue and invoke the downstream chain.
  * <p>
  * When {@code validateAccessToken=true}, the access-token cookie is verified as a JWT against the IdP's JWKS on every
- * request. When {@code false}, the cookie value is treated as an opaque access token and validated by calling the
- * userinfo endpoint; the userinfo response is wrapped as a {@link JWT} for ScopedValue binding.
+ * request, including an audience check that the {@code aud} claim contains the configured client id. When {@code
+ * false}, the cookie value is treated as an opaque access token and validated at the IdP's RFC 7662 introspection
+ * endpoint; the introspection response is wrapped as a {@link JWT} for ScopedValue binding and is subject to the same
+ * audience check.
  * <p>
  * On expired access token, the middleware attempts a refresh using the {@code refresh_token} cookie before falling back
  * to {@link #unauthorized(HTTPRequest, HTTPResponse)}. Subclasses may override that hook to change the unauthenticated

@@ -19,6 +19,10 @@ import module org.lattejava.web;
  * against JWKS and bound to the {@link OIDC} ScopedValue before the chain continues. The decoded JWT, not the
  * introspection response, carries the claims; introspection is purely a validity/revocation gate.
  * <p>
+ * When {@link OIDCConfig#apiAudience()} is set, the decoded token's {@code aud} claim must contain that value or the
+ * request is rejected with {@link UnauthenticatedException} (401). When it is {@code null} the audience check is
+ * skipped and audience/scope enforcement is left to the {@link APIAuthorizer}.
+ * <p>
  * Authorization (whether the token may call a given API) is delegated separately to {@link APIAuthorized}. Failures are
  * communicated by throwing (no redirects): {@link UnauthenticatedException} (401) for a missing/invalid token that
  * cannot be refreshed, and {@link ServiceUnavailableException} (503) when introspection cannot reach the IdP.
@@ -72,6 +76,11 @@ public class APIAuthenticated implements Middleware {
       jwt = JWT.decode(accessToken, jwks);
     } catch (Exception e) {
       throw new UnauthenticatedException("The access token could not be decoded", e);
+    }
+
+    String apiAudience = config.apiAudience();
+    if (apiAudience != null && !jwt.audience().contains(apiAudience)) {
+      throw new UnauthenticatedException("The access token aud claim " + jwt.audience() + " does not contain the required API audience [" + apiAudience + "]");
     }
 
     ScopedValue.where(Tools.CURRENT_JWT, jwt).call(() -> {

@@ -23,6 +23,12 @@ Uses the **Latte** build tool (not Maven/Gradle). Key commands:
 
 Build config is in `project.latte` (Groovy DSL). Using `--debug` allows for interactive debugging when Latte runs into issues with the project file or the build process.
 
+## Testing
+
+Tests use TestNG. The OIDC integration tests drive a real, kickstart-provisioned **FusionAuth at `http://localhost:9012`** (host port `9012` → container `9011`, mapped in `src/test/fusionauth/docker-compose.yml`; the port is `9012` for `web` so it doesn't conflict with other projects). The base URL and all kickstart constants live in `FusionAuthFixture` (`FA_BASE_URL`). Start it with `docker compose up -d` from `src/test/fusionauth` before running `latte test`; tests that need it fail fast if it's unreachable.
+
+Note: FusionAuth's discovery document does **not** advertise `introspection_endpoint`, so any config using introspection (`validateAccessToken=false` or the API auth flow) must set `introspectionEndpoint` explicitly rather than relying on issuer discovery.
+
 ## Java Version
 
 Java 25. Uses the Java module system (`module-info.java`).

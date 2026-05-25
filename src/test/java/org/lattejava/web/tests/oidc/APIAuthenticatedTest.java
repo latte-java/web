@@ -42,6 +42,40 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
   }
 
   @Test
+  public void audienceMismatch_returns401() throws Exception {
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    OIDC<String> api = OIDC.create(configBuilder().apiAudience("some-other-audience").build(), JWT::subject);
+
+    try (var web = new Web()) {
+      web.prefix("/api", p -> {
+        p.install(api.apiAuthenticated());
+        p.get("/me", (_, res) -> res.setStatus(200));
+      });
+      web.start(PORT);
+
+      HttpResponse<String> res = send("/api/me", Map.of("Authorization", "Bearer " + accessToken));
+      assertEquals(res.statusCode(), 401);
+    }
+  }
+
+  @Test
+  public void audienceMatch_callsHandler() throws Exception {
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    OIDC<String> api = OIDC.create(configBuilder().apiAudience(STANDARD_APP_ID).build(), JWT::subject);
+
+    try (var web = new Web()) {
+      web.prefix("/api", p -> {
+        p.install(api.apiAuthenticated());
+        p.get("/me", (_, res) -> res.setStatus(200));
+      });
+      web.start(PORT);
+
+      HttpResponse<String> res = send("/api/me", Map.of("Authorization", "Bearer " + accessToken));
+      assertEquals(res.statusCode(), 200);
+    }
+  }
+
+  @Test
   public void customExtractor_honored() throws Exception {
     String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     OIDC<String> api = OIDC.create(

@@ -88,7 +88,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
       String location = res.headers().firstValue("Location").orElseThrow();
       URI uri = URI.create(location);
       String base = uri.getScheme() + "://" + uri.getAuthority() + uri.getPath();
-      assertEquals(base, "http://localhost:9010/oauth2/authorize");
+      assertEquals(base, "http://localhost:9012/oauth2/authorize");
 
       Map<String, String> params = parseQuery(uri.getRawQuery());
       assertEquals(params.get("response_type"), "code");

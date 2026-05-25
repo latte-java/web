@@ -123,6 +123,23 @@ public class Tools {
                .orElse("");
   }
 
+  /**
+   * Converts a flat JSON object of claims to a {@link JWT}, mapping each property to a claim. Used to build the bound
+   * JWT from an IdP response (RFC 7662 introspection or userinfo) when the access token is opaque and cannot be decoded
+   * locally.
+   *
+   * @param json The JSON claims object.
+   * @return The JWT.
+   */
+  public static JWT jsonToJWT(JsonNode json) {
+    JWT.Builder builder = JWT.builder();
+    Iterable<Map.Entry<String, JsonNode>> it = json.properties();
+    for (var e : it) {
+      builder.claim(e.getKey(), unwrap(e.getValue()));
+    }
+    return builder.build();
+  }
+
   public static TokenEndpointResponse postToken(OIDCConfig config, Map<String, String> form) throws IOException, InterruptedException {
     String body = Tools.formEncode(form);
     String basic = "Basic " + Base64.getEncoder().encodeToString(
@@ -190,7 +207,7 @@ public class Tools {
 
   /**
    * Enforces that the URI uses HTTPS, except when the host is a loopback address. This makes local development with
-   * {@code http://localhost:9010} (etc.) workable without undermining production security posture.
+   * {@code http://localhost:9012} (etc.) workable without undermining production security posture.
    */
   public static void requireSecureURI(String field, URI uri) {
     if (uri == null) {
@@ -231,21 +248,6 @@ public class Tools {
   public static String textOrNull(JsonNode node, String property) {
     JsonNode v = node != null ? node.get(property) : null;
     return (v != null && !v.isNull()) ? v.asText() : null;
-  }
-
-  /**
-   * Converts a userinfo response to a JWT.
-   *
-   * @param json The userinfo response.
-   * @return The JWT.
-   */
-  public static JWT userinfoToJWT(JsonNode json) {
-    JWT.Builder builder = JWT.builder();
-    Iterable<Map.Entry<String, JsonNode>> it = json.properties();
-    for (var e : it) {
-      builder.claim(e.getKey(), unwrap(e.getValue()));
-    }
-    return builder.build();
   }
 
   /**

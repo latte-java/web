@@ -40,7 +40,7 @@
       "body": {
         "tenant": {
           "name": "standard",
-          "issuer": "http://localhost:9010/10000000-0000-0000-0000-000000000001",
+          "issuer": "http://localhost:9012/10000000-0000-0000-0000-000000000001",
           "jwtConfiguration": {
             "accessTokenKeyId": "#{asymmetricKeyId}",
             "idTokenKeyId": "#{asymmetricKeyId}",
