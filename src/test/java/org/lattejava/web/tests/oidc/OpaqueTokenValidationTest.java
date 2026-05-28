@@ -138,7 +138,7 @@ public class OpaqueTokenValidationTest extends BaseOIDCTest {
 
   @Test
   public void opaqueMode_validToken_passesThroughToHandler() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
 
     try (var web = new Web()) {
       web.install(opaqueSessionEndpoints);

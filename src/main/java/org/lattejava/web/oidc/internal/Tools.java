@@ -128,15 +128,23 @@ public class Tools {
   }
 
   public static TokenEndpointResponse postToken(OIDCConfig config, Map<String, String> form) throws IOException, InterruptedException {
-    String body = Tools.formEncode(form);
-    String basic = "Basic " + Base64.getEncoder().encodeToString(
-        (config.clientId() + ":" + config.clientSecret()).getBytes(StandardCharsets.UTF_8)
-    );
-    HttpRequest req = HttpRequest.newBuilder(config.tokenEndpoint())
-                                 .header("Authorization", basic)
-                                 .header("Content-Type", "application/x-www-form-urlencoded")
-                                 .POST(HttpRequest.BodyPublishers.ofString(body))
-                                 .build();
+    HttpRequest.Builder builder = HttpRequest.newBuilder(config.tokenEndpoint())
+                                             .header("Content-Type", "application/x-www-form-urlencoded");
+    Map<String, String> effectiveForm = form;
+    if (config.publicClient()) {
+      // Public client: no Basic auth; client_id travels in the form body (RFC 6749 §3.2.1). PKCE provides the
+      // proof-of-possession on the matching authorize request.
+      effectiveForm = new LinkedHashMap<>(form);
+      effectiveForm.put("client_id", config.clientId());
+    } else {
+      // Confidential client: HTTP Basic with clientId:clientSecret.
+      String basic = "Basic " + Base64.getEncoder().encodeToString(
+          (config.clientId() + ":" + config.clientSecret()).getBytes(StandardCharsets.UTF_8)
+      );
+      builder.header("Authorization", basic);
+    }
+
+    HttpRequest req = builder.POST(HttpRequest.BodyPublishers.ofString(Tools.formEncode(effectiveForm))).build();
     HttpResponse<String> res = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
     return new TokenEndpointResponse(res.statusCode(), res.body());
   }

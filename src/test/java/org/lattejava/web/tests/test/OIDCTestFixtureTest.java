@@ -40,7 +40,7 @@ public class OIDCTestFixtureTest extends BaseWebTest {
     var webTest = new WebTest(PORT);
     var fixture = new OIDCTestFixture(webTest, oidcConfig);
 
-    fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD, FusionAuthFixture.STANDARD_APP_ID);
+    fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD);
 
     Cookie accessToken = webTest.cookies.get(ACCESS_COOKIE);
     Cookie idToken = webTest.cookies.get(ID_COOKIE);
@@ -70,7 +70,7 @@ public class OIDCTestFixtureTest extends BaseWebTest {
       var webTest = new WebTest(PORT);
       var fixture = new OIDCTestFixture(webTest, oidcConfig);
 
-      fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD, FusionAuthFixture.STANDARD_APP_ID);
+      fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD);
 
       webTest.get("/protected/me")
              .assertStatus(200)
@@ -83,7 +83,7 @@ public class OIDCTestFixtureTest extends BaseWebTest {
     var webTest = new WebTest(PORT);
     var fixture = new OIDCTestFixture(webTest, oidcConfig);
 
-    fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD, FusionAuthFixture.STANDARD_APP_ID);
+    fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD);
     fixture.logout();
 
     assertNull(webTest.cookies.get(ACCESS_COOKIE));

@@ -116,7 +116,7 @@ public class CallbackTest extends BaseOIDCTest {
       web.install(sessionEndpoints);
       web.start(PORT);
 
-      var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
+      var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, BASE_URL + "/oidc/return");
 
       HttpResponse<String> res = get("/oidc/return?code=" + auth.code() + "&state=" + auth.state(),
           "oidc_state=" + auth.state() + "; oidc_return_to=" + BASE_URL + "/dashboard");
@@ -133,7 +133,7 @@ public class CallbackTest extends BaseOIDCTest {
       web.install(sessionEndpoints);
       web.start(PORT);
 
-      var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
+      var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, BASE_URL + "/oidc/return");
 
       HttpResponse<String> res = get("/oidc/return?code=" + auth.code() + "&state=" + auth.state(),
           "oidc_state=" + auth.state());

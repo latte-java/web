@@ -38,7 +38,7 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void customReader_honored() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     // Use a custom APISettings with a custom token reader that reads from X-My-Access header. The settings object
     // itself does not model header names — the reader does.
     var apiSettings = APISettings.builder()
@@ -103,7 +103,7 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void inactiveToken_validRefresh_refreshesAndWritesHeader() throws Exception {
-    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD);
     assertNotNull(tokens.refreshToken());
     OIDC<String> apiOIDC = apiOIDC();
 
@@ -187,7 +187,7 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void validAccessToken_bindsJWT_callsHandler() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     OIDC<String> apiOIDC = apiOIDC();
 
     try (var web = new Web()) {

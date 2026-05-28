@@ -15,6 +15,13 @@ import org.lattejava.web.oidc.internal.Tools;
  * <p>
  * Either {@code issuer} (for OIDC Discovery) or all four endpoint URLs (authorize, token, userinfo, jwks) must be
  * provided. Mixing is allowed; explicit endpoints override discovered ones.
+ * <p>
+ * Public-client mode ({@code publicClient=true}) is for clients that have no securely held {@code client_secret} —
+ * native, desktop, CLI, console, and single-page apps. In this mode {@code clientSecret} may be omitted; the token
+ * endpoint is authenticated by including {@code client_id} in the request form body (RFC 6749 §3.2.1) and PKCE
+ * provides the proof-of-possession. RFC 7662 introspection is not supported for public clients because nearly all
+ * IdPs require client authentication on the introspect endpoint; configuring {@code publicClient=true} with
+ * {@code validateAccessToken=false} is rejected at build time.
  *
  * @author Brian Pontarelli
  */
@@ -30,7 +37,8 @@ public record OIDCConfig(
     String clientSecret,
     List<String> scopes,
     Function<JWT, Set<String>> roleExtractor,
-    boolean validateAccessToken
+    boolean validateAccessToken,
+    boolean publicClient
 ) {
 
   /**
@@ -53,6 +61,7 @@ public record OIDCConfig(
     private String issuer;
     private URI jwksEndpoint;
     private URI logoutEndpoint;
+    private boolean publicClient = false;
     private Function<JWT, Set<String>> roleExtractor = jwt -> {
       var roles = jwt.getList("roles", String.class);
       return new HashSet<>(roles);
@@ -78,8 +87,14 @@ public record OIDCConfig(
         throw new IllegalArgumentException("clientId must not be null or blank");
       }
 
-      if (clientSecret == null || clientSecret.isBlank()) {
-        throw new IllegalArgumentException("clientSecret must not be null or blank");
+      if (!publicClient && (clientSecret == null || clientSecret.isBlank())) {
+        throw new IllegalArgumentException(
+            "clientSecret must not be null or blank for confidential clients — set publicClient(true) for public clients (CLI, native, desktop, SPA)");
+      }
+
+      if (publicClient && !validateAccessToken) {
+        throw new IllegalArgumentException(
+            "publicClient=true requires validateAccessToken=true — RFC 7662 introspection requires client authentication and is incompatible with public clients");
       }
 
       boolean hasIssuer = issuer != null && !issuer.isBlank();
@@ -119,7 +134,8 @@ public record OIDCConfig(
       }
 
       return new OIDCConfig(issuer, authorizeEndpoint, tokenEndpoint, userinfoEndpoint, jwksEndpoint,
-          logoutEndpoint, introspectionEndpoint, clientId, clientSecret, scopes, roleExtractor, validateAccessToken);
+          logoutEndpoint, introspectionEndpoint, clientId, clientSecret, scopes, roleExtractor, validateAccessToken,
+          publicClient);
     }
 
     public Builder clientId(String value) {
@@ -149,6 +165,20 @@ public record OIDCConfig(
 
     public Builder logoutEndpoint(URI value) {
       this.logoutEndpoint = value;
+      return this;
+    }
+
+    /**
+     * Marks this configuration as a public client (CLI, native, desktop, console, SPA). When {@code true},
+     * {@code clientSecret} may be omitted and the token endpoint is authenticated via {@code client_id} in the form
+     * body; PKCE remains required as the proof-of-possession. RFC 7662 introspection is incompatible with public
+     * clients, so {@code validateAccessToken(false)} must not be combined with this setting.
+     *
+     * @param value {@code true} to enable public-client mode; defaults to {@code false}.
+     * @return This builder.
+     */
+    public Builder publicClient(boolean value) {
+      this.publicClient = value;
       return this;
     }
 

@@ -56,7 +56,7 @@ public class JWTAuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void validAccessToken_callsHandler_withTranslatedUser() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
 
     try (var web = new Web()) {
       web.install(sessionEndpoints);
@@ -85,7 +85,7 @@ public class JWTAuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void validRefreshToken_refreshSucceeds_callsHandler() throws Exception {
-    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD);
     assertNotNull(tokens.refreshToken());
 
     try (var web = new Web()) {

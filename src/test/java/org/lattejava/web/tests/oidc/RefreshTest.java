@@ -17,8 +17,10 @@ import static org.testng.Assert.*;
 public class RefreshTest extends BaseOIDCTest {
   private static final int MOCK_PORT = 9099;
 
+  private static FusionAuthFixture fastFixture;
   private static OIDC<JWT> fastOIDC;
   private static Middleware fastSessionEndpoints;
+  private static FusionAuthFixture rotatingFixture;
   private static OIDC<JWT> rotatingOIDC;
   private static Middleware rotatingSessionEndpoints;
 
@@ -31,6 +33,7 @@ public class RefreshTest extends BaseOIDCTest {
                                .build();
     fastOIDC = OIDC.ssr(fastConfig);
     fastSessionEndpoints = OIDC.sessionEndpoints(fastConfig);
+    fastFixture = new FusionAuthFixture(new WebTest(PORT), fastConfig);
 
     var rotatingConfig = OIDCConfig.builder()
                                    .issuer(STANDARD_ISSUER)
@@ -39,6 +42,7 @@ public class RefreshTest extends BaseOIDCTest {
                                    .build();
     rotatingOIDC = OIDC.ssr(rotatingConfig);
     rotatingSessionEndpoints = OIDC.sessionEndpoints(rotatingConfig);
+    rotatingFixture = new FusionAuthFixture(new WebTest(PORT), rotatingConfig);
   }
 
   private static void assertLoginRedirect(HttpResponse<String> res) {
@@ -51,7 +55,7 @@ public class RefreshTest extends BaseOIDCTest {
 
   @Test
   public void expiredAccessToken_validRefreshToken_refreshSucceeds_andSetsNewAccessTokenCookie() throws Exception {
-    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, FAST_APP_ID);
+    Tokens tokens = fastFixture.login(USER_EMAIL, DEFAULT_PASSWORD);
     assertNotNull(tokens.refreshToken(), "fast app should issue a refresh token");
     Thread.sleep(2000);
 
@@ -112,7 +116,7 @@ public class RefreshTest extends BaseOIDCTest {
 
   @Test
   public void rotationEnabled_refreshIssuesNewRefreshTokenCookie_withRefreshTokenMaxAge() throws Exception {
-    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, ROTATING_APP_ID);
+    Tokens tokens = rotatingFixture.login(USER_EMAIL, DEFAULT_PASSWORD);
     assertNotNull(tokens.refreshToken());
 
     try (var web = new Web()) {
@@ -136,7 +140,7 @@ public class RefreshTest extends BaseOIDCTest {
 
   @Test
   public void successfulRefresh_setsNewIdTokenCookie() throws Exception {
-    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
+    Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD);
     assertNotNull(tokens.idToken());
 
     try (var web = new Web()) {

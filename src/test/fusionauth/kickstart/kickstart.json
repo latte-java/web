@@ -10,6 +10,7 @@
     "standardUserId": "10000000-0000-0000-0000-000000000010",
     "standardAdminId": "10000000-0000-0000-0000-000000000011",
     "fastAppId": "20000000-0000-0000-0000-000000000002",
+    "publicCLIAppId": "30000000-0000-0000-0000-000000000001",
     "defaultPassword": "password",
     "standardAppSecret": "standard-app-secret-1234567890abcdef",
     "rotatingRefreshAppSecret": "rotating-refresh-app-secret-12345678",
@@ -179,6 +180,30 @@
     },
     {
       "method": "POST",
+      "url": "/api/application/#{publicCLIAppId}",
+      "tenantId": "#{standardTenantId}",
+      "body": {
+        "application": {
+          "name": "public-cli",
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": ["http://127.0.0.1:8765/callback"],
+            "clientAuthenticationPolicy": "NotRequiredWhenUsingPKCE",
+            "consentMode": "NeverPrompt",
+            "enabledGrants": ["authorization_code", "refresh_token"],
+            "generateRefreshTokens": true,
+            "proofKeyForCodeExchangePolicy": "Required",
+            "scopeHandlingPolicy": "Compatibility"
+          },
+          "roles": [
+            { "name": "user" },
+            { "name": "admin" },
+            { "name": "moderator" }
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
       "url": "/api/user/registration/#{standardUserId}",
       "tenantId": "#{standardTenantId}",
       "body": {
@@ -270,6 +295,17 @@
         "registration": {
           "applicationId": "#{fastAppId}",
           "roles": ["admin"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration/#{standardUserId}",
+      "tenantId": "#{standardTenantId}",
+      "body": {
+        "registration": {
+          "applicationId": "#{publicCLIAppId}",
+          "roles": ["user", "moderator"]
         }
       }
     }

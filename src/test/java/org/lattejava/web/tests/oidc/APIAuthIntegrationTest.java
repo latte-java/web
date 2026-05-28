@@ -20,7 +20,7 @@ import static org.testng.Assert.*;
 public class APIAuthIntegrationTest extends BaseOIDCTest {
   @Test
   public void authenticatedAndAuthorized_reachesHandler() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     OIDC<String> apiOIDC = apiOIDC();
 
     try (var web = new Web()) {
@@ -37,7 +37,7 @@ public class APIAuthIntegrationTest extends BaseOIDCTest {
 
   @Test
   public void authenticatedButNotAuthorized_returns403() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     OIDC<String> apiOIDC = apiOIDC();
 
     try (var web = new Web()) {

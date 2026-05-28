@@ -23,7 +23,7 @@ public class MultiClientTest extends BaseOIDCTest {
   @Test
   public void tokenForStandardApp_rejectedByFastApp() throws Exception {
     // Login against the standard app — the resulting access token is audience-constrained to STANDARD_APP_ID.
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
 
     // Build an API profile for the FAST app — different clientId, same issuer.
     OIDC<String> fastApi = OIDC.api(
@@ -58,8 +58,9 @@ public class MultiClientTest extends BaseOIDCTest {
   @Test
   public void twoProfilesSameIssuer_eachValidatesItsOwnToken() throws Exception {
     // Mints tokens for two different apps under the same issuer/tenant.
-    String standardToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
-    String fastToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, FAST_APP_ID).accessToken();
+    String standardToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
+    var fastFixture = new FusionAuthFixture(new WebTest(PORT), configFor(FAST_APP_ID));
+    String fastToken = fastFixture.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
 
     // Both profiles are configured against the same issuer; each validates its own app's token correctly.
     OIDC<String> standardSsr = OIDC.ssr(

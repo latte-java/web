@@ -55,7 +55,7 @@ public class IntrospectTest extends BaseOIDCTest {
 
   @Test
   public void validFAToken_returnsActive() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     var config = faConfigWithIntrospection();
     var result = new TokenValidator(config, null).introspect(accessToken);
     assertTrue(result instanceof TokenValidator.IntrospectionResult.Active, "Expected Active but got " + result);

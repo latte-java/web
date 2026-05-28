@@ -29,7 +29,7 @@ public class AuthenticationTest extends BaseWebTest {
   public void api_cookieTransport_readsTokenFromCookie() throws Exception {
     // A real FA access token, read from a cookie instead of the Authorization header.
     // Demonstrates that swapping the TokenReader in APISettings supersedes the default header transport.
-    String accessToken = new FusionAuthFixture().login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String accessToken = new FusionAuthFixture().login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     var cookieReader = new CookieTokenReader("access_token", "refresh_token", "id_token");
     var cookieWriter = new CookieTokenWriter("access_token", "refresh_token", "id_token", Duration.ofDays(30));
     var apiSettings = APISettings.builder()

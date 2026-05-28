@@ -31,7 +31,8 @@ public class RolesTest extends BaseOIDCTest {
                            })
                            .build();
     OIDC<String> keycloakOIDC = OIDC.ssr(config, JWT::subject);
-    String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD, KEYCLOAK_APP_ID).accessToken();
+    var keycloakFixture = new FusionAuthFixture(new WebTest(PORT), config);
+    String token = keycloakFixture.login(ADMIN_EMAIL, DEFAULT_PASSWORD).accessToken();
 
     try (var web = new Web()) {
       web.install(sessionEndpoints);
@@ -53,7 +54,7 @@ public class RolesTest extends BaseOIDCTest {
 
   @Test
   public void hasAllRoles_userAndModerator_passesForUser() throws Exception {
-    String token = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String token = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     try (var web = new Web()) {
       web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
@@ -69,7 +70,7 @@ public class RolesTest extends BaseOIDCTest {
 
   @Test
   public void hasAllRoles_userAndModerator_returns403ForAdmin() throws Exception {
-    String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD).accessToken();
     try (var web = new Web()) {
       web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
@@ -103,7 +104,7 @@ public class RolesTest extends BaseOIDCTest {
 
   @Test
   public void hasAnyRole_admin_passesForAdmin() throws Exception {
-    String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD).accessToken();
     try (var web = new Web()) {
       web.install(sessionEndpoints);
       web.prefix("/admin", p -> {
@@ -119,7 +120,7 @@ public class RolesTest extends BaseOIDCTest {
 
   @Test
   public void hasAnyRole_admin_returns403ForUser() throws Exception {
-    String token = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
+    String token = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
     try (var web = new Web()) {
       web.install(sessionEndpoints);
       web.prefix("/admin", p -> {

@@ -61,6 +61,43 @@ public class OIDCConfigTest {
     OIDCConfig.builder().issuer("https://x").clientId("c").build();
   }
 
+  @Test
+  public void builder_publicClient_omitsSecret() {
+    var config = OIDCConfig.builder()
+                           .authorizeEndpoint(URI.create("https://idp/authorize"))
+                           .tokenEndpoint(URI.create("https://idp/token"))
+                           .userinfoEndpoint(URI.create("https://idp/userinfo"))
+                           .jwksEndpoint(URI.create("https://idp/jwks"))
+                           .clientId("public-cli")
+                           .publicClient(true)
+                           .build();
+    assertTrue(config.publicClient());
+    assertNull(config.clientSecret());
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void builder_publicClient_withIntrospection_throws() {
+    OIDCConfig.builder()
+              .authorizeEndpoint(URI.create("https://idp/authorize"))
+              .tokenEndpoint(URI.create("https://idp/token"))
+              .userinfoEndpoint(URI.create("https://idp/userinfo"))
+              .jwksEndpoint(URI.create("https://idp/jwks"))
+              .introspectionEndpoint(URI.create("https://idp/introspect"))
+              .clientId("public-cli")
+              .publicClient(true)
+              .validateAccessToken(false)
+              .build();
+  }
+
+  @Test
+  public void builder_defaults_confidentialClient() {
+    var config = OIDCConfig.builder()
+                           .issuer("http://localhost:9012/10000000-0000-0000-0000-000000000001")
+                           .clientId("c").clientSecret("s")
+                           .build();
+    assertFalse(config.publicClient());
+  }
+
   @Test(expectedExceptions = IllegalArgumentException.class)
   public void builder_neitherIssuerNorAllEndpoints_throws() {
     OIDCConfig.builder().clientId("c").clientSecret("s").build();
