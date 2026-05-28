@@ -10,11 +10,10 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 import module org.testng;
 
-import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 /**
- * Exercises the SameSite-Strict / cross-site-request recovery path in {@link Authenticated}: when the access token is
+ * Exercises the SameSite-Strict / cross-site-request recovery path in {@link Authentication}: when the access token is
  * invalid and no refresh token cookie is visible (the browser withheld the SameSite=Strict refresh token on a
  * cross-site entry navigation), the middleware serves a same-site meta-refresh interstitial so the refresh token is
  * sent on the follow-up request. The {@code csroidcredirect} guard parameter must ensure this happens at most once so a
@@ -28,68 +27,6 @@ public class CrossSiteRefreshTest extends BaseOIDCTest {
     if (web != null) {
       web.close();
       web = null;
-    }
-  }
-
-  private void startProtectedServer() {
-    web = new Web();
-    web.install(oidc);
-    web.prefix("/protected", p -> {
-      p.install(oidc.authenticated());
-      p.get("/page", (_, res) -> res.setStatus(200));
-    });
-    web.start(PORT);
-  }
-
-  @Test
-  public void invalidAccessToken_noRefreshToken_firstRequest_writesMetaRefreshWithGuardParam() throws Exception {
-    startProtectedServer();
-
-    HttpResponse<String> res = get("/protected/page", "access_token=tampered");
-
-    // Not a redirect — an interstitial HTML page that the browser re-navigates same-site.
-    assertEquals(res.statusCode(), 200);
-    assertTrue(res.headers().firstValue("Content-Type").orElse("").contains("text/html"),
-        "Expected an HTML interstitial, got Content-Type [" + res.headers().firstValue("Content-Type").orElse("") + "]");
-    assertTrue(res.headers().firstValue("Location").isEmpty(), "Interstitial must not be an HTTP redirect");
-    assertTrue(res.body().contains("http-equiv=\"refresh\""), "Expected a meta-refresh body, got: " + res.body());
-    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?" + Authenticated.CSR_REDIRECT_PARAM + "=1"),
-        "Meta-refresh must target the original URL with the guard parameter, got: " + res.body());
-  }
-
-  @Test
-  public void metaRefresh_appendsGuardParam_whenURLAlreadyHasQueryString() throws Exception {
-    startProtectedServer();
-
-    HttpResponse<String> res = get("/protected/page?foo=bar", "access_token=tampered");
-
-    assertEquals(res.statusCode(), 200);
-    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?foo=bar&" + Authenticated.CSR_REDIRECT_PARAM + "=1"),
-        "Guard param must be appended with [&] when a query string is already present, got: " + res.body());
-  }
-
-  /**
-   * The core guarantee: when the browser follows the interstitial back to the same URL but the refresh token is still
-   * absent (genuinely deleted/expired rather than merely withheld by SameSite), the guard parameter must stop a second
-   * interstitial and fall through to the normal unauthorized handling. Without the guard this would loop forever.
-   */
-  @Test
-  public void guardParamPresent_noRefreshToken_doesNotLoop_fallsThroughToLogin() throws Exception {
-    startProtectedServer();
-
-    HttpResponse<String> res = get("/protected/page?" + Authenticated.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
-
-    // No second interstitial — the loop is broken.
-    assertNotEquals(res.statusCode(), 200, "Guard param must prevent a second meta-refresh interstitial");
-    assertFalse(res.body().contains("http-equiv=\"refresh\""), "Must not serve another meta-refresh, got: " + res.body());
-
-    // Terminates at the normal unauthorized path.
-    assertEquals(res.statusCode(), 302);
-    assertEquals(res.headers().firstValue("Location").orElse(null), "/login");
-    for (String name : List.of("access_token", "id_token", "refresh_token")) {
-      Cookie c = getCookie(res, name);
-      assertNotNull(c, "Expected cleared [" + name + "] cookie");
-      assertEquals(c.getMaxAge(), Long.valueOf(0L));
     }
   }
 
@@ -118,6 +55,58 @@ public class CrossSiteRefreshTest extends BaseOIDCTest {
   }
 
   /**
+   * The core guarantee: when the browser follows the interstitial back to the same URL but the refresh token is still
+   * absent (genuinely deleted/expired rather than merely withheld by SameSite), the guard parameter must stop a second
+   * interstitial and fall through to the normal unauthorized handling. Without the guard this would loop forever.
+   */
+  @Test
+  public void guardParamPresent_noRefreshToken_doesNotLoop_fallsThroughToLogin() throws Exception {
+    startProtectedServer();
+
+    HttpResponse<String> res = get("/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
+
+    // No second interstitial — the loop is broken.
+    assertNotEquals(res.statusCode(), 200, "Guard param must prevent a second meta-refresh interstitial");
+    assertFalse(res.body().contains("http-equiv=\"refresh\""), "Must not serve another meta-refresh, got: " + res.body());
+
+    // Terminates at the normal unauthorized path.
+    assertEquals(res.statusCode(), 302);
+    assertEquals(res.headers().firstValue("Location").orElse(null), "/login");
+    for (String name : List.of("access_token", "id_token", "refresh_token")) {
+      Cookie c = getCookie(res, name);
+      assertNotNull(c, "Expected cleared [" + name + "] cookie");
+      assertEquals(c.getMaxAge(), Long.valueOf(0L));
+    }
+  }
+
+  @Test
+  public void invalidAccessToken_noRefreshToken_firstRequest_writesMetaRefreshWithGuardParam() throws Exception {
+    startProtectedServer();
+
+    HttpResponse<String> res = get("/protected/page", "access_token=tampered");
+
+    // Not a redirect — an interstitial HTML page that the browser re-navigates same-site.
+    assertEquals(res.statusCode(), 200);
+    assertTrue(res.headers().firstValue("Content-Type").orElse("").contains("text/html"),
+        "Expected an HTML interstitial, got Content-Type [" + res.headers().firstValue("Content-Type").orElse("") + "]");
+    assertTrue(res.headers().firstValue("Location").isEmpty(), "Interstitial must not be an HTTP redirect");
+    assertTrue(res.body().contains("http-equiv=\"refresh\""), "Expected a meta-refresh body, got: " + res.body());
+    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1"),
+        "Meta-refresh must target the original URL with the guard parameter, got: " + res.body());
+  }
+
+  @Test
+  public void metaRefresh_appendsGuardParam_whenURLAlreadyHasQueryString() throws Exception {
+    startProtectedServer();
+
+    HttpResponse<String> res = get("/protected/page?foo=bar", "access_token=tampered");
+
+    assertEquals(res.statusCode(), 200);
+    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?foo=bar&" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1"),
+        "Guard param must be appended with [&] when a query string is already present, got: " + res.body());
+  }
+
+  /**
    * When a refresh token cookie is visible the interstitial must be skipped entirely — the middleware attempts a
    * refresh directly. A failed refresh still terminates (login redirect), never an interstitial.
    */
@@ -131,5 +120,15 @@ public class CrossSiteRefreshTest extends BaseOIDCTest {
     assertFalse(res.body().contains("http-equiv=\"refresh\""), "Must not serve a meta-refresh when a refresh token is present");
     assertEquals(res.statusCode(), 302);
     assertEquals(res.headers().firstValue("Location").orElse(null), "/login");
+  }
+
+  private void startProtectedServer() {
+    web = new Web();
+    web.install(sessionEndpoints);
+    web.prefix("/protected", p -> {
+      p.install(ssr.authenticated());
+      p.get("/page", (_, res) -> res.setStatus(200));
+    });
+    web.start(PORT);
   }
 }

@@ -15,23 +15,27 @@ import module org.lattejava.web;
  * @author Brian Pontarelli
  */
 public class LogoutHandler implements Handler {
+  private final BrowserSettings browser;
   private final OIDCConfig config;
 
-  public LogoutHandler(OIDCConfig config) {
+  public LogoutHandler(OIDCConfig config, BrowserSettings browser) {
     this.config = config;
+    this.browser = browser;
   }
 
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) throws Exception {
     URI logoutEndpoint = config.logoutEndpoint();
     if (logoutEndpoint == null) {
-      Tools.clearAllCookies(req, res, config);
-      res.sendRedirect(config.postLogout());
+      browser.tokenWriter().clear(req, res);
+      Tools.clearCookie(req, res, browser.stateCookieName());
+      Tools.clearCookie(req, res, browser.returnToCookieName());
+      res.sendRedirect(browser.postLogoutPage());
       return;
     }
 
-    String idToken = Tools.readCookie(req, config.idTokenCookieName());
-    URI returnURI = URI.create(req.getBaseURL() + config.logoutReturnPath());
+    String idToken = browser.tokenReader().read(req).idToken();
+    URI returnURI = URI.create(req.getBaseURL() + browser.logoutReturnPath());
 
     StringBuilder url = new StringBuilder(logoutEndpoint.toString());
     url.append(url.indexOf("?") < 0 ? '?' : '&')

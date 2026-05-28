@@ -10,6 +10,13 @@ import module java.net.http;
 import module org.lattejava.jwt;
 import module org.lattejava.web;
 
+/**
+ * Validates OIDC access tokens. Performs local JWT verification against the JWKS when
+ * {@link org.lattejava.web.oidc.OIDCConfig#validateAccessToken()} is {@code true}, and RFC 7662 introspection for
+ * opaque tokens when it is {@code false}. Both paths require the {@code aud} claim to contain the configured client id.
+ *
+ * @author Brian Pontarelli
+ */
 public class TokenValidator {
   private final OIDCConfig config;
   private final JWKS jwks;
@@ -20,10 +27,10 @@ public class TokenValidator {
   }
 
   /**
-   * Validates a token against the IdP's RFC 7662 introspection endpoint. The {@link IntrospectionResult.Active} result
-   * carries a {@link JWT} built from the introspection response claims. Callers that decode the access token themselves
-   * (the API authentication path) ignore those claims and use introspection purely as a validity/revocation gate;
-   * the opaque-access-token cookie path uses them as its only claims source.
+   * Validates a token against the IdP's RFC 7662 introspection endpoint. Used uniformly when
+   * {@link OIDCConfig#validateAccessToken()} is {@code false} (the token is opaque and cannot be decoded locally). The
+   * {@link IntrospectionResult.Active} result carries a {@link JWT} built from the introspection response claims, which
+   * is the token's only claims source in this mode.
    *
    * @param token The token to introspect.
    * @return {@link IntrospectionResult.Active} (carrying the response claims) when the IdP reports {@code active=true};
@@ -63,9 +70,18 @@ public class TokenValidator {
     }
   }
 
-  public Result validate(String token, boolean accessToken) {
-    // If we are validating the access-token, verify it as a JWT
-    if (!accessToken || config.validateAccessToken()) {
+  /**
+   * Validates an access token. When {@link OIDCConfig#validateAccessToken()} is {@code true} the token is decoded
+   * locally as a JWT against the configured JWKS; when it is {@code false} the token is validated via RFC 7662
+   * introspection (which also handles opaque tokens). In either case the audience claim must contain the configured
+   * client ID.
+   *
+   * @param token The access token to validate.
+   * @return The validation result: {@link Result.Valid} carrying the bound JWT, {@link Result.Invalid} for any
+   *     non-network failure, or {@link Result.NetworkError} when the IdP is unreachable.
+   */
+  public Result validate(String token) {
+    if (config.validateAccessToken()) {
       try {
         var jwt = JWT.decode(token, jwks, this::validateJWT);
         return new Result.Valid(jwt);
@@ -74,9 +90,8 @@ public class TokenValidator {
       }
     }
 
-    // This branch is `accessToken=true AND validateAccessToken=false`: the access token is opaque and cannot be decoded
-    // locally, so we ask the IdP via RFC 7662 introspection. The introspection response is the only claims source and
-    // it supplies the `aud` claim for the audience check.
+    // validateAccessToken=false: the access token may be opaque; ask the IdP via RFC 7662 introspection.
+    // The introspection response is the only claims source and supplies the aud claim for the audience check.
     IntrospectionResult result = introspect(token);
     if (result instanceof IntrospectionResult.NetworkError) {
       return new Result.NetworkError();
@@ -97,13 +112,13 @@ public class TokenValidator {
 
   private void validateJWT(JWT jwt) {
     if (!jwt.audience().contains(config.clientId())) {
-      throw new InvalidJWTException("The aud claim " + jwt.audience() + " does not contain the client id [" + config.clientId() + "]");
+      throw new InvalidJWTException("The aud claim [" + jwt.audience() + "] does not contain the client id [" + config.clientId() + "]");
     }
   }
 
   /**
    * Outcome of a call to the introspection endpoint. {@link Active} carries the claims parsed from the introspection
-   * response; the gate-only API path ignores them while the opaque-token path uses them as its claims source.
+   * response, which are the token's claims source in introspection ({@code validateAccessToken=false}) mode.
    */
   public sealed interface IntrospectionResult
       permits IntrospectionResult.Active, IntrospectionResult.Inactive, IntrospectionResult.NetworkError {

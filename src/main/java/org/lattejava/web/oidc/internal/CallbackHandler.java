@@ -17,12 +17,13 @@ import module org.lattejava.web;
  * @author Brian Pontarelli
  */
 public class CallbackHandler implements Handler {
+  private final BrowserSettings browser;
   private final OIDCConfig config;
-
   private final JWKS jwks;
 
-  public CallbackHandler(OIDCConfig config, JWKS jwks) {
+  public CallbackHandler(OIDCConfig config, BrowserSettings browser, JWKS jwks) {
     this.config = config;
+    this.browser = browser;
     this.jwks = jwks;
   }
 
@@ -36,7 +37,7 @@ public class CallbackHandler implements Handler {
     }
 
     String queryState = req.getURLParameter("state");
-    String cookieState = Tools.readCookie(req, config.stateCookieName());
+    String cookieState = Tools.readCookie(req, browser.stateCookieName());
     if (queryState == null || !queryState.equals(cookieState)) {
       redirectError(req, res, "invalid_state", "Invalid state");
       return;
@@ -48,7 +49,7 @@ public class CallbackHandler implements Handler {
       return;
     }
 
-    URI redirectURI = config.fullRedirectURI(req);
+    URI redirectURI = URI.create(req.getBaseURL() + browser.callbackPath());
     Tools.TokenEndpointResponse tok;
     try {
       tok = exchangeCode(code, redirectURI, cookieState);
@@ -84,19 +85,19 @@ public class CallbackHandler implements Handler {
     // When validateAccessToken=true, verify the access-token JWT too.
     if (config.validateAccessToken()) {
       try {
-        JWT.decode(idToken, jwks);
+        JWT.decode(accessToken, jwks);
       } catch (Exception e) {
         redirectError(req, res, "invalid_access_token", "Invalid access token");
         return;
       }
     }
 
-    String returnTo = Tools.readCookie(req, config.returnToCookieName());
-    Tools.addAuthCookies(req, res, config, idToken, accessToken, refreshToken, expiresIn);
-    Tools.clearCookie(req, res, config.stateCookieName());
-    Tools.clearCookie(req, res, config.returnToCookieName());
+    String returnTo = Tools.readCookie(req, browser.returnToCookieName());
+    browser.tokenWriter().write(req, res, new Tokens(accessToken, refreshToken, idToken, expiresIn));
+    Tools.clearCookie(req, res, browser.stateCookieName());
+    Tools.clearCookie(req, res, browser.returnToCookieName());
 
-    res.sendRedirect(returnTo != null && !returnTo.isBlank() ? returnTo : config.postLoginPage());
+    res.sendRedirect(returnTo != null && !returnTo.isBlank() ? returnTo : browser.postLoginPage());
   }
 
   private Tools.TokenEndpointResponse exchangeCode(String code, URI redirectURI, String codeVerifier)
@@ -112,9 +113,11 @@ public class CallbackHandler implements Handler {
   }
 
   private void redirectError(HTTPRequest req, HTTPResponse res, String code, String description) {
-    Tools.clearAllCookies(req, res, config);
-    String target = config.errorPage()
-        + (config.errorPage().contains("?") ? "&" : "?")
+    browser.tokenWriter().clear(req, res);
+    Tools.clearCookie(req, res, browser.stateCookieName());
+    Tools.clearCookie(req, res, browser.returnToCookieName());
+    String target = browser.errorPage()
+        + (browser.errorPage().contains("?") ? "&" : "?")
         + "oidc_error=" + URLEncoder.encode(code, StandardCharsets.UTF_8)
         + "&oidc_error_description=" + URLEncoder.encode(description, StandardCharsets.UTF_8);
     res.sendRedirect(target);

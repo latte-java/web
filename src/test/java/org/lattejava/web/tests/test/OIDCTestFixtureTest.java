@@ -15,7 +15,13 @@ import org.lattejava.web.tests.oidc.*;
 import static org.testng.Assert.*;
 
 public class OIDCTestFixtureTest extends BaseWebTest {
-  private static OIDC<String> oidc;
+  // Default cookie names from BrowserSettings.Builder defaults
+  private static final String ACCESS_COOKIE = "access_token";
+  private static final String ID_COOKIE = "id_token";
+  private static final String REFRESH_COOKIE = "refresh_token";
+
+  private static OIDC<String> ssr;
+  private static Middleware sessionEndpoints;
   private static OIDCConfig oidcConfig;
 
   @BeforeClass
@@ -25,7 +31,8 @@ public class OIDCTestFixtureTest extends BaseWebTest {
                            .clientId(FusionAuthFixture.STANDARD_APP_ID)
                            .clientSecret(FusionAuthFixture.STANDARD_APP_SECRET)
                            .build();
-    oidc = OIDC.create(oidcConfig, JWT::subject);
+    ssr = OIDC.ssr(oidcConfig, JWT::subject);
+    sessionEndpoints = OIDC.sessionEndpoints(oidcConfig);
   }
 
   @Test
@@ -35,9 +42,9 @@ public class OIDCTestFixtureTest extends BaseWebTest {
 
     fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD, FusionAuthFixture.STANDARD_APP_ID);
 
-    Cookie accessToken = webTest.cookies.get(oidcConfig.accessTokenCookieName());
-    Cookie idToken = webTest.cookies.get(oidcConfig.idTokenCookieName());
-    Cookie refreshToken = webTest.cookies.get(oidcConfig.refreshTokenCookieName());
+    Cookie accessToken = webTest.cookies.get(ACCESS_COOKIE);
+    Cookie idToken = webTest.cookies.get(ID_COOKIE);
+    Cookie refreshToken = webTest.cookies.get(REFRESH_COOKIE);
 
     assertNotNull(accessToken, "Expected access_token cookie in jar");
     assertNotNull(idToken, "Expected id_token cookie in jar");
@@ -50,12 +57,12 @@ public class OIDCTestFixtureTest extends BaseWebTest {
   @Test
   public void login_thenRequestProtectedRoute_succeeds() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
+        p.install(ssr.authenticated());
         p.get("/me", (_, res) -> {
           res.setStatus(200);
-          res.getWriter().write(oidc.user());
+          res.getWriter().write(ssr.user());
         });
       });
       web.start(PORT);
@@ -79,8 +86,8 @@ public class OIDCTestFixtureTest extends BaseWebTest {
     fixture.login(FusionAuthFixture.USER_EMAIL, FusionAuthFixture.DEFAULT_PASSWORD, FusionAuthFixture.STANDARD_APP_ID);
     fixture.logout();
 
-    assertNull(webTest.cookies.get(oidcConfig.accessTokenCookieName()));
-    assertNull(webTest.cookies.get(oidcConfig.idTokenCookieName()));
-    assertNull(webTest.cookies.get(oidcConfig.refreshTokenCookieName()));
+    assertNull(webTest.cookies.get(ACCESS_COOKIE));
+    assertNull(webTest.cookies.get(ID_COOKIE));
+    assertNull(webTest.cookies.get(REFRESH_COOKIE));
   }
 }

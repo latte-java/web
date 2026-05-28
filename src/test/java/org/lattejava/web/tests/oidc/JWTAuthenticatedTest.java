@@ -17,9 +17,9 @@ public class JWTAuthenticatedTest extends BaseOIDCTest {
   @Test
   public void invalidAccessToken_invalidRefreshToken_clearsAuthCookies_returns401() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/api", p -> {
-        p.install(oidc.jwtAuthenticated());
+        p.install(spa.authenticated());
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -40,9 +40,9 @@ public class JWTAuthenticatedTest extends BaseOIDCTest {
   @Test
   public void noAccessTokenCookie_returns401() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/api", p -> {
-        p.install(oidc.jwtAuthenticated());
+        p.install(spa.authenticated());
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -59,11 +59,11 @@ public class JWTAuthenticatedTest extends BaseOIDCTest {
     String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
 
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/api", p -> {
-        p.install(oidc.jwtAuthenticated());
+        p.install(spa.authenticated());
         p.get("/me", (_, res) -> {
-          String subject = oidc.user();
+          String subject = spa.user();
           res.setStatus(200);
           res.getWriter().write(subject);
         });
@@ -89,9 +89,9 @@ public class JWTAuthenticatedTest extends BaseOIDCTest {
     assertNotNull(tokens.refreshToken());
 
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/api", p -> {
-        p.install(oidc.jwtAuthenticated());
+        p.install(spa.authenticated());
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);

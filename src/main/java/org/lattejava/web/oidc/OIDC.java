@@ -5,69 +5,95 @@
 package org.lattejava.web.oidc;
 
 import module java.base;
-import module org.lattejava.http;
 import module org.lattejava.jwt;
 import module org.lattejava.web;
-
-import org.lattejava.web.oidc.internal.CallbackHandler;
 
 /**
  * The OpenID Connect entry point for Latte Web.
  * <p>
- * Install the instance at the root with {@code web.install(oidc)} — it handles the callback, logout, and logout-return
- * paths by virtue of being a {@link Middleware} itself. Attach protection where needed via {@link #authenticated()},
- * {@link #jwtAuthenticated()}, {@link #hasAnyRole(String...)}, or {@link #hasAllRoles(String...)}, which are thin
- * factories around the public {@link Authenticated}, {@link JWTAuthenticated}, {@link HasAnyRole}, and
- * {@link HasAllRoles} middlewares.
+ * Use the mode-first static factories to create a profile instance: {@link #ssr}, {@link #spa}, or {@link #api} for
+ * standard modes; {@link #custom} for fully manual wiring. Register session endpoints (login, callback, logout,
+ * logout-return) with {@link #sessionEndpoints(OIDCConfig)} or {@link #sessionEndpoints(OIDCConfig, BrowserSettings)}.
+ * Protect routes via {@link #authenticated()}, {@link #hasAnyRole(String...)}, {@link #hasAllRoles(String...)}, or
+ * {@link #authorized(Authorizer)}.
  * <p>
  * Request-scoped access to the authenticated JWT is available via the static {@link #jwt()} / {@link #optionalJWT()}
  * and the instance-level {@link #user()} / {@link #optionalUser()}, which apply the configured translator.
  *
- * @param <U> The translated-user type. Use {@link #create(OIDCConfig)} for the untyped {@code OpenIDConnect<JWT>} or
- *            {@link #create(OIDCConfig, Function)} with a custom translator.
+ * @param <U> The translated-user type. Use the identity factory overloads for an untyped {@code OIDC<JWT>}.
  * @author Brian Pontarelli
  */
-public class OIDC<U> implements Middleware {
-  private final CallbackHandler callbackHandler;
+public class OIDC<U> {
+  private static final Map<String, JWKS> JWKS_CACHE = new ConcurrentHashMap<>();
+
+  private final AuthChallenge challenge;
   private final OIDCConfig config;
-  private final JWKS jwks;
-  private final LoginHandler loginHandler;
-  private final LogoutHandler logoutHandler;
-  private final LogoutReturnHandler logoutReturnHandler;
+  private final TokenReader reader;
   private final Function<JWT, U> translator;
+  private final TokenValidator validator;
+  private final TokenWriter writer;
 
-  private OIDC(OIDCConfig config, Function<JWT, U> translator) {
+  private OIDC(OIDCConfig config, TokenReader reader, TokenWriter writer, AuthChallenge challenge,
+               Function<JWT, U> translator) {
     this.config = config;
+    this.reader = reader;
+    this.writer = writer;
+    this.challenge = challenge;
     this.translator = translator;
-    this.jwks = JWKS.fromJWKS(config.jwksEndpoint().toString()).build();
 
-    this.callbackHandler = new CallbackHandler(config, jwks);
-    this.loginHandler = new LoginHandler(config);
-    this.logoutHandler = new LogoutHandler(config);
-    this.logoutReturnHandler = new LogoutReturnHandler(config);
+    JWKS jwks = jwks(config);
+    this.validator = new TokenValidator(config, jwks);
   }
 
   /**
-   * Constructs an untyped {@code OpenIDConnect<JWT>} — {@link #user()} returns the bound JWT directly.
+   * Creates an API-mode profile with default {@link APISettings} and {@code JWT} as the user type.
    *
-   * @param config The configuration.
-   * @return The constructed OpenIDConnect instance.
-   * @throws IllegalStateException If discovery fails or a required endpoint can't be resolved.
+   * @param config The IdP configuration.
+   * @return The profile instance.
    */
-  public static OIDC<JWT> create(OIDCConfig config) {
-    return new OIDC<>(config, Function.identity());
+  public static OIDC<JWT> api(OIDCConfig config) {
+    return api(config, APISettings.builder().build(), Function.identity());
   }
 
   /**
-   * Constructs a typed OpenIDConnect, applying the translator on every call to {@link #user()}.
+   * Creates an API-mode profile with default {@link APISettings} and a custom translator.
    *
-   * @param config     The configuration.
-   * @param translator Maps a JWT to the user's domain object.
-   * @return The constructed OpenIDConnect instance.
-   * @throws IllegalStateException If discovery fails or a required endpoint can't be resolved.
+   * @param config     The IdP configuration.
+   * @param translator Maps the bound JWT to a domain object.
+   * @param <U>        The user type.
+   * @return The profile instance.
    */
-  public static <U> OIDC<U> create(OIDCConfig config, Function<JWT, U> translator) {
-    return new OIDC<>(config, translator);
+  public static <U> OIDC<U> api(OIDCConfig config, Function<JWT, U> translator) {
+    return api(config, APISettings.builder().build(), translator);
+  }
+
+  /**
+   * Creates an API-mode profile with explicit {@link APISettings} and a custom translator.
+   *
+   * @param config     The IdP configuration.
+   * @param api        The API transport settings.
+   * @param translator Maps the bound JWT to a domain object.
+   * @param <U>        The user type.
+   * @return The profile instance.
+   */
+  public static <U> OIDC<U> api(OIDCConfig config, APISettings api, Function<JWT, U> translator) {
+    return new OIDC<>(config, api.tokenReader(), api.tokenWriter(), new StatusChallenge(), translator);
+  }
+
+  /**
+   * Creates a fully custom profile with explicit transport and challenge.
+   *
+   * @param config     The IdP configuration.
+   * @param reader     The token reader.
+   * @param writer     The token writer.
+   * @param challenge  The auth challenge.
+   * @param translator Maps the bound JWT to a domain object.
+   * @param <U>        The user type.
+   * @return The profile instance.
+   */
+  public static <U> OIDC<U> custom(OIDCConfig config, TokenReader reader, TokenWriter writer, AuthChallenge challenge,
+                                   Function<JWT, U> translator) {
+    return new OIDC<>(config, reader, writer, challenge, translator);
   }
 
   /**
@@ -93,95 +119,142 @@ public class OIDC<U> implements Middleware {
   }
 
   /**
-   * Creates the API authentication middleware. Install once at the common API prefix (e.g. {@code /api}); it validates
-   * the request's access token via introspection, refreshes it reactively, and binds the decoded JWT. Authorization is
-   * applied separately via {@link #apiAuthorized(APIAuthorizer)}.
+   * Returns a {@link Middleware} that dispatches the four browser session endpoints (login, callback, logout,
+   * logout-return) using default {@link BrowserSettings}.
    *
-   * @return A new {@link APIAuthenticated} middleware bound to this OpenIDConnect instance.
-   * @throws IllegalStateException If no introspection endpoint is configured (set it explicitly or provide an issuer
-   *                               whose discovery document advertises {@code introspection_endpoint}).
+   * @param config The IdP configuration.
+   * @return The session endpoints middleware.
    */
-  public APIAuthenticated apiAuthenticated() {
-    if (config.introspectionEndpoint() == null) {
-      throw new IllegalStateException("apiAuthenticated() requires an introspection endpoint — set introspectionEndpoint explicitly or provide an issuer whose discovery advertises [introspection_endpoint]");
-    }
-    return new APIAuthenticated(config, jwks);
+  public static Middleware sessionEndpoints(OIDCConfig config) {
+    return sessionEndpoints(config, BrowserSettings.builder().build());
   }
 
   /**
-   * Creates an API authorization middleware that delegates the access decision to the given authorizer. Install
-   * downstream of {@link #apiAuthenticated()} — per sub-API and optionally as a baseline at the API prefix. Authorizers
-   * compose additively along the prefix chain (all must pass).
+   * Returns a {@link Middleware} that dispatches the four browser session endpoints using the given
+   * {@link BrowserSettings}.
    *
-   * @param authorizer The application-supplied access decision.
-   * @return A new {@link APIAuthorized} middleware.
+   * @param config  The IdP configuration.
+   * @param browser The browser settings (paths, cookie names, redirect targets).
+   * @return The session endpoints middleware.
    */
-  public APIAuthorized apiAuthorized(APIAuthorizer authorizer) {
-    return new APIAuthorized(authorizer);
+  public static Middleware sessionEndpoints(OIDCConfig config, BrowserSettings browser) {
+    return new SessionEndpoints(config, browser, jwks(config));
   }
 
   /**
-   * @return A new {@link Authenticated} middleware bound to this OpenIDConnect instance.
+   * Creates an SPA-mode profile with default {@link BrowserSettings} and {@code JWT} as the user type.
+   *
+   * @param config The IdP configuration.
+   * @return The profile instance.
    */
-  public Authenticated authenticated() {
-    return new Authenticated(config, jwks);
+  public static OIDC<JWT> spa(OIDCConfig config) {
+    return spa(config, BrowserSettings.builder().build(), Function.identity());
   }
 
   /**
-   * System middleware dispatch: handles {@code callbackPath}, {@code logoutPath}, and {@code logoutReturnPath}. Any
-   * other path passes through to the chain.
+   * Creates an SPA-mode profile with default {@link BrowserSettings} and a custom translator.
+   *
+   * @param config     The IdP configuration.
+   * @param translator Maps the bound JWT to a domain object.
+   * @param <U>        The user type.
+   * @return The profile instance.
    */
-  @Override
-  public void handle(HTTPRequest req, HTTPResponse res, MiddlewareChain chain) throws Exception {
-    String path = req.getPath();
-    if (path.equals(config.callbackPath())) {
-      callbackHandler.handle(req, res);
-      return;
-    }
-
-    if (path.equals(config.loginPath())) {
-      loginHandler.handle(req, res);
-      return;
-    }
-
-    if (path.equals(config.logoutPath())) {
-      logoutHandler.handle(req, res);
-      return;
-    }
-
-    if (path.equals(config.logoutReturnPath())) {
-      logoutReturnHandler.handle(req, res);
-      return;
-    }
-
-    chain.next(req, res);
+  public static <U> OIDC<U> spa(OIDCConfig config, Function<JWT, U> translator) {
+    return spa(config, BrowserSettings.builder().build(), translator);
   }
 
   /**
-   * @param roles One or more roles; the middleware requires the authenticated user to possess every listed role.
-   * @return A new {@link HasAllRoles} middleware bound to this OpenIDConnect instance.
+   * Creates an SPA-mode profile with explicit {@link BrowserSettings} and a custom translator.
+   *
+   * @param config     The IdP configuration.
+   * @param browser    The browser settings (cookie names for reading tokens).
+   * @param translator Maps the bound JWT to a domain object.
+   * @param <U>        The user type.
+   * @return The profile instance.
    */
-  public HasAllRoles hasAllRoles(String... roles) {
-    return new HasAllRoles(config, roles);
+  public static <U> OIDC<U> spa(OIDCConfig config, BrowserSettings browser, Function<JWT, U> translator) {
+    return new OIDC<>(config, browser.tokenReader(), browser.tokenWriter(), new StatusChallenge(), translator);
   }
 
   /**
-   * @param roles One or more roles; the middleware lets the request through when the authenticated user has at least
-   *              one of them.
-   * @return A new {@link HasAnyRole} middleware bound to this OpenIDConnect instance.
+   * Creates an SSR-mode profile with default {@link BrowserSettings} and {@code JWT} as the user type.
+   *
+   * @param config The IdP configuration.
+   * @return The profile instance.
    */
-  public HasAnyRole hasAnyRole(String... roles) {
-    return new HasAnyRole(config, roles);
+  public static OIDC<JWT> ssr(OIDCConfig config) {
+    return ssr(config, BrowserSettings.builder().build(), Function.identity());
   }
 
   /**
-   * @return A new {@link JWTAuthenticated} middleware bound to this OpenIDConnect instance. Use this for browser flows
-   *     (or some API client flows) that call API endpoints using the same cookies that the browser flows use, except
-   *     these flows expect a 401 on failure instead of a login redirect. Specifically, `fetch` and SPA flows will use
-   *     this middleware extensively.
+   * Creates an SSR-mode profile with default {@link BrowserSettings} and a custom translator.
+   *
+   * @param config     The IdP configuration.
+   * @param translator Maps the bound JWT to a domain object.
+   * @param <U>        The user type.
+   * @return The profile instance.
    */
-  public JWTAuthenticated jwtAuthenticated() {
-    return new JWTAuthenticated(config, jwks);
+  public static <U> OIDC<U> ssr(OIDCConfig config, Function<JWT, U> translator) {
+    return ssr(config, BrowserSettings.builder().build(), translator);
+  }
+
+  /**
+   * Creates an SSR-mode profile with explicit {@link BrowserSettings} and a custom translator.
+   *
+   * @param config     The IdP configuration.
+   * @param browser    The browser settings (cookie names, redirect targets, challenge pages).
+   * @param translator Maps the bound JWT to a domain object.
+   * @param <U>        The user type.
+   * @return The profile instance.
+   */
+  public static <U> OIDC<U> ssr(OIDCConfig config, BrowserSettings browser, Function<JWT, U> translator) {
+    return new OIDC<>(config, browser.tokenReader(), browser.tokenWriter(), new RedirectChallenge(browser), translator);
+  }
+
+  private static JWKS jwks(OIDCConfig config) {
+    return JWKS_CACHE.computeIfAbsent(config.jwksEndpoint().toString(), uri -> JWKS.fromJWKS(uri).build());
+  }
+
+  /**
+   * Returns a {@link Middleware} that authenticates the request using this profile's transport and challenge.
+   *
+   * @return The authentication middleware.
+   */
+  public Middleware authenticated() {
+    return new Authentication(config, reader, writer, challenge, validator);
+  }
+
+  /**
+   * Returns a {@link Middleware} that authorizes the authenticated request using the given {@link Authorizer}. Must be
+   * installed downstream of {@link #authenticated()}.
+   *
+   * @param authorizer The access decision.
+   * @return The authorization middleware.
+   */
+  public Middleware authorized(Authorizer authorizer) {
+    return new Authorization(authorizer, challenge, writer);
+  }
+
+  /**
+   * Returns a {@link Middleware} that requires all the named roles. Must be installed downstream of
+   * {@link #authenticated()}.
+   *
+   * @param roles One or more roles; the authenticated user must possess every one.
+   * @return The authorization middleware.
+   */
+  public Middleware hasAllRoles(String... roles) {
+    return new Authorization(Authorizer.hasAllRoles(config.roleExtractor(), roles), challenge, writer);
+  }
+
+  /**
+   * Returns a {@link Middleware} that requires at least one of the named roles. Must be installed downstream of
+   * {@link #authenticated()}.
+   *
+   * @param roles One or more roles; the authenticated user must possess at least one.
+   * @return The authorization middleware.
+   */
+  public Middleware hasAnyRole(String... roles) {
+    return new Authorization(Authorizer.hasAnyRole(config.roleExtractor(), roles), challenge, writer);
   }
 
   /**

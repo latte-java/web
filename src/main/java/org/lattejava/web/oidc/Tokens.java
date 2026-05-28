@@ -9,7 +9,7 @@ package org.lattejava.web.oidc;
  * a refresh response might omit the refresh or id token, and the expiry is unknown until a token endpoint reports it.
  * <p>
  * This single record is used throughout the OIDC subsystem: as the result of a refresh exchange
- * ({@code Tools.refresh}), as the value a {@link TokenExtractor} pulls off a request and a {@link TokenWriter} puts
+ * ({@code Tools.refresh}), as the value a {@link TokenReader} pulls off a request and a {@link TokenWriter} puts
  * back, and as the return of the test fixture's login helper.
  *
  * @param accessToken  The access token, or {@code null}.

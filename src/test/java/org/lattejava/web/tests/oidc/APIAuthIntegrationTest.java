@@ -14,19 +14,19 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 /**
- * End-to-end API auth against FusionAuth: {@code apiAuthenticated()} validates and binds the JWT, then
- * {@code apiAuthorized(...)} makes the access decision off a real claim.
+ * End-to-end API auth against FusionAuth: {@code api.authenticated()} validates and binds the JWT, then
+ * {@code api.authorized(...)} makes the access decision off a real claim.
  */
 public class APIAuthIntegrationTest extends BaseOIDCTest {
   @Test
   public void authenticatedAndAuthorized_reachesHandler() throws Exception {
     String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
-    OIDC<String> api = apiOIDC();
+    OIDC<String> apiOIDC = apiOIDC();
 
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
-        p.install(api.apiAuthorized((_, jwt) -> STANDARD_USER_ID.equals(jwt.subject())));
+        p.install(apiOIDC.authenticated());
+        p.install(apiOIDC.authorized((_, jwt) -> STANDARD_USER_ID.equals(jwt.subject())));
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -38,12 +38,12 @@ public class APIAuthIntegrationTest extends BaseOIDCTest {
   @Test
   public void authenticatedButNotAuthorized_returns403() throws Exception {
     String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
-    OIDC<String> api = apiOIDC();
+    OIDC<String> apiOIDC = apiOIDC();
 
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
-        p.install(api.apiAuthorized((_, _) -> false));
+        p.install(apiOIDC.authenticated());
+        p.install(apiOIDC.authorized((_, _) -> false));
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -53,12 +53,12 @@ public class APIAuthIntegrationTest extends BaseOIDCTest {
   }
 
   private OIDC<String> apiOIDC() {
-    return OIDC.create(OIDCConfig.builder()
-                                 .issuer(STANDARD_ISSUER)
-                                 .clientId(STANDARD_APP_ID)
-                                 .clientSecret(STANDARD_APP_SECRET)
-                                 .introspectionEndpoint(URI.create(FA_BASE_URL + "/oauth2/introspect"))
-                                 .build(), JWT::subject);
+    return OIDC.api(OIDCConfig.builder()
+                              .issuer(STANDARD_ISSUER)
+                              .clientId(STANDARD_APP_ID)
+                              .clientSecret(STANDARD_APP_SECRET)
+                              .introspectionEndpoint(URI.create(FA_BASE_URL + "/oauth2/introspect"))
+                              .build(), JWT::subject);
   }
 
   private HttpResponse<String> getWithToken(String accessToken) throws Exception {

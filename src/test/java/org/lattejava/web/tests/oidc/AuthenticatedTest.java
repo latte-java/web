@@ -25,12 +25,12 @@ public class AuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void optionalUser_outsideProtectedRoute_isEmpty() {
-    assertTrue(oidc.optionalUser().isEmpty());
+    assertTrue(ssr.optionalUser().isEmpty());
   }
 
   @Test
   public void user_outsideProtectedRoute_throws() {
-    expectThrows(UnauthenticatedException.class, oidc::user);
+    expectThrows(UnauthenticatedException.class, ssr::user);
   }
 
   @Test
@@ -38,11 +38,11 @@ public class AuthenticatedTest extends BaseOIDCTest {
     String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
 
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
+        p.install(ssr.authenticated());
         p.get("/me", (_, res) -> {
-          String subject = oidc.user();
+          String subject = ssr.user();
           res.setStatus(200);
           res.getWriter().write(subject);
         });

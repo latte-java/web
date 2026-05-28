@@ -17,7 +17,7 @@ public class LogoutTest extends BaseOIDCTest {
   @Test
   public void logoutPath_withLogoutEndpoint_butNoIdTokenCookie_omitsIdTokenHint() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/logout", null);
@@ -34,7 +34,7 @@ public class LogoutTest extends BaseOIDCTest {
   @Test
   public void logoutPath_withLogoutEndpoint_redirectsToIdP_withAllParams() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/logout", "id_token=opaque-id-token");
@@ -58,17 +58,18 @@ public class LogoutTest extends BaseOIDCTest {
     // Set-Cookie must also omit Secure. Otherwise Safari drops the clear directive on plain
     // HTTP and the cookies persist (logout silently fails). Regression guard against the
     // hardcoded Secure=true that previously lived in Tools.clearCookie.
-    OIDC<?> noLogoutOIDC = OIDC.create(OIDCConfig.builder()
-                                                 .authorizeEndpoint(URI.create("http://localhost:9012/oauth2/authorize"))
-                                                 .tokenEndpoint(URI.create("http://localhost:9012/oauth2/token"))
-                                                 .userinfoEndpoint(URI.create("http://localhost:9012/oauth2/userinfo"))
-                                                 .jwksEndpoint(URI.create("http://localhost:9012/.well-known/jwks.json"))
-                                                 .clientId(STANDARD_APP_ID)
-                                                 .clientSecret(STANDARD_APP_SECRET)
-                                                 .build());
+    var noLogoutConfig = OIDCConfig.builder()
+                                   .authorizeEndpoint(URI.create("http://localhost:9012/oauth2/authorize"))
+                                   .tokenEndpoint(URI.create("http://localhost:9012/oauth2/token"))
+                                   .userinfoEndpoint(URI.create("http://localhost:9012/oauth2/userinfo"))
+                                   .jwksEndpoint(URI.create("http://localhost:9012/.well-known/jwks.json"))
+                                   .clientId(STANDARD_APP_ID)
+                                   .clientSecret(STANDARD_APP_SECRET)
+                                   .build();
+    Middleware noLogoutSessionEndpoints = OIDC.sessionEndpoints(noLogoutConfig);
 
     try (var web = new Web()) {
-      web.install(noLogoutOIDC);
+      web.install(noLogoutSessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/logout", "access_token=a; id_token=i; refresh_token=r");
@@ -82,17 +83,18 @@ public class LogoutTest extends BaseOIDCTest {
 
   @Test
   public void logoutPath_withoutLogoutEndpoint_clearsCookies_andRedirectsToPostLogoutPage() throws Exception {
-    OIDC<?> noLogoutOIDC = OIDC.create(OIDCConfig.builder()
-                                                 .authorizeEndpoint(URI.create("http://localhost:9012/oauth2/authorize"))
-                                                 .tokenEndpoint(URI.create("http://localhost:9012/oauth2/token"))
-                                                 .userinfoEndpoint(URI.create("http://localhost:9012/oauth2/userinfo"))
-                                                 .jwksEndpoint(URI.create("http://localhost:9012/.well-known/jwks.json"))
-                                                 .clientId(STANDARD_APP_ID)
-                                                 .clientSecret(STANDARD_APP_SECRET)
-                                                 .build());
+    var noLogoutConfig = OIDCConfig.builder()
+                                   .authorizeEndpoint(URI.create("http://localhost:9012/oauth2/authorize"))
+                                   .tokenEndpoint(URI.create("http://localhost:9012/oauth2/token"))
+                                   .userinfoEndpoint(URI.create("http://localhost:9012/oauth2/userinfo"))
+                                   .jwksEndpoint(URI.create("http://localhost:9012/.well-known/jwks.json"))
+                                   .clientId(STANDARD_APP_ID)
+                                   .clientSecret(STANDARD_APP_SECRET)
+                                   .build();
+    Middleware noLogoutSessionEndpoints = OIDC.sessionEndpoints(noLogoutConfig);
 
     try (var web = new Web()) {
-      web.install(noLogoutOIDC);
+      web.install(noLogoutSessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/logout", "access_token=a; id_token=i; refresh_token=r");
@@ -110,7 +112,7 @@ public class LogoutTest extends BaseOIDCTest {
   @Test
   public void logoutReturnPath_clearedCookies_omitSecureFlag_overHttp() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/logout-return", "access_token=a; id_token=i; refresh_token=r; oidc_state=s; oidc_return_to=here");
@@ -125,7 +127,7 @@ public class LogoutTest extends BaseOIDCTest {
   @Test
   public void logoutReturnPath_clearedCookies_setSecureFlag_whenForwardedHttps() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       try (HttpClient client = HttpClient.newBuilder()
@@ -150,7 +152,7 @@ public class LogoutTest extends BaseOIDCTest {
   @Test
   public void logoutReturnPath_clearsAllCookies_andRedirectsToPostLogoutPage() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/logout-return", "access_token=a; id_token=i; refresh_token=r; oidc_state=s; oidc_return_to=here");
@@ -168,7 +170,7 @@ public class LogoutTest extends BaseOIDCTest {
   @Test
   public void logoutReturnPath_hitDirectlyWithoutCookies_succeeds() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/logout-return", null);

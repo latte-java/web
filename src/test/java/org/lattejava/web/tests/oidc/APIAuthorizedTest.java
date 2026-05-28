@@ -4,13 +4,9 @@
  */
 package org.lattejava.web.tests.oidc;
 
-import module java.base;
-import module java.net.http;
 import module org.lattejava.jwt;
 import module org.lattejava.web;
 import module org.testng;
-
-import org.lattejava.web.oidc.internal.*;
 
 import static org.testng.Assert.*;
 
@@ -20,7 +16,7 @@ public class APIAuthorizedTest extends BaseOIDCTest {
     try (var web = new Web()) {
       web.prefix("/api", p -> {
         p.install(bind(JWT.builder().build()));
-        p.install(oidc.apiAuthorized((_, _) -> true));
+        p.install(api.authorized((_, _) -> true));
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -34,7 +30,7 @@ public class APIAuthorizedTest extends BaseOIDCTest {
     try (var web = new Web()) {
       web.prefix("/api", p -> {
         p.install(bind(JWT.builder().build()));
-        p.install(oidc.apiAuthorized((_, _) -> false));
+        p.install(api.authorized((_, _) -> false));
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -48,7 +44,7 @@ public class APIAuthorizedTest extends BaseOIDCTest {
     try (var web = new Web()) {
       web.prefix("/api", p -> {
         p.install(bind(JWT.builder().build()));
-        p.install(oidc.apiAuthorized((req, jwt) -> jwt != null && req.getPath().equals("/api/me")));
+        p.install(api.authorized((req, jwt) -> jwt != null && req.getPath().equals("/api/me")));
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -60,11 +56,11 @@ public class APIAuthorizedTest extends BaseOIDCTest {
   @Test
   public void layered_baselinePassesSubDenies_returns403() throws Exception {
     try (var web = new Web()) {
-      web.prefix("/api", api -> {
-        api.install(bind(JWT.builder().build()));
-        api.install(oidc.apiAuthorized((_, _) -> true));
-        api.prefix("/users", u -> {
-          u.install(oidc.apiAuthorized((_, _) -> false));
+      web.prefix("/api", apiPfx -> {
+        apiPfx.install(bind(JWT.builder().build()));
+        apiPfx.install(api.authorized((_, _) -> true));
+        apiPfx.prefix("/users", u -> {
+          u.install(api.authorized((_, _) -> false));
           u.get("/list", (_, res) -> res.setStatus(200));
         });
       });
@@ -77,11 +73,11 @@ public class APIAuthorizedTest extends BaseOIDCTest {
   @Test
   public void layered_bothPass_callsHandler() throws Exception {
     try (var web = new Web()) {
-      web.prefix("/api", api -> {
-        api.install(bind(JWT.builder().build()));
-        api.install(oidc.apiAuthorized((_, _) -> true));
-        api.prefix("/users", u -> {
-          u.install(oidc.apiAuthorized((_, _) -> true));
+      web.prefix("/api", apiPfx -> {
+        apiPfx.install(bind(JWT.builder().build()));
+        apiPfx.install(api.authorized((_, _) -> true));
+        apiPfx.prefix("/users", u -> {
+          u.install(api.authorized((_, _) -> true));
           u.get("/list", (_, res) -> res.setStatus(200));
         });
       });
@@ -95,7 +91,7 @@ public class APIAuthorizedTest extends BaseOIDCTest {
   public void noBoundJWT_returns401() throws Exception {
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(oidc.apiAuthorized((_, _) -> true));
+        p.install(api.authorized((_, _) -> true));
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);

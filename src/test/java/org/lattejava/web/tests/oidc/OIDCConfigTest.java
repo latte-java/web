@@ -24,14 +24,6 @@ public class OIDCConfigTest {
     assertNotNull(config.authorizeEndpoint());
   }
 
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void builder_callbackPathWithoutSlash_throws() {
-    OIDCConfig.builder()
-              .issuer("https://idp").clientId("c").clientSecret("s")
-              .callbackPath("oidc/return")
-              .build();
-  }
-
   @Test
   public void builder_defaults_setSensibleValues() {
     var config = OIDCConfig.builder()
@@ -47,35 +39,7 @@ public class OIDCConfigTest {
 
     assertEquals(config.scopes(), List.of("openid", "profile", "email", "offline_access"));
     assertTrue(config.validateAccessToken());
-    assertEquals(config.errorPage(), "/");
-    assertEquals(config.postLoginPage(), "/");
-    assertEquals(config.postLogout(), "/");
-    assertEquals(config.callbackPath(), "/oidc/return");
-    assertEquals(config.logoutPath(), "/logout");
-    assertEquals(config.logoutReturnPath(), "/oidc/logout-return");
-    assertEquals(config.stateCookieName(), "oidc_state");
-    assertEquals(config.accessTokenCookieName(), "access_token");
-    assertEquals(config.refreshTokenCookieName(), "refresh_token");
-    assertEquals(config.idTokenCookieName(), "id_token");
-    assertEquals(config.returnToCookieName(), "oidc_return_to");
-    assertEquals(config.refreshTokenMaxAge(), Duration.ofDays(30));
     assertNotNull(config.roleExtractor());
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void builder_duplicateCookieNames_throws() {
-    OIDCConfig.builder()
-              .issuer("https://idp").clientId("c").clientSecret("s")
-              .stateCookieName("x").accessTokenCookieName("x")
-              .build();
-  }
-
-  @Test(expectedExceptions = IllegalArgumentException.class)
-  public void builder_duplicatePaths_throws() {
-    OIDCConfig.builder()
-              .issuer("https://idp").clientId("c").clientSecret("s")
-              .callbackPath("/same").logoutPath("/same")
-              .build();
   }
 
   @Test
@@ -130,5 +94,24 @@ public class OIDCConfigTest {
               .issuer("https://idp").clientId("c").clientSecret("s")
               .scopes(List.of("profile", "email"))
               .build();
+  }
+
+  @Test
+  public void requiredFields() {
+    assertThrows(IllegalArgumentException.class, () -> OIDCConfig.builder().build());
+    assertThrows(IllegalArgumentException.class,
+        () -> OIDCConfig.builder().clientId("c").clientSecret("s").build()); // no issuer/endpoints
+  }
+
+  @Test
+  public void validateAccessTokenFalseRequiresIntrospection() {
+    assertThrows(IllegalStateException.class, () -> OIDCConfig.builder()
+        .authorizeEndpoint(URI.create("https://idp/auth"))
+        .tokenEndpoint(URI.create("https://idp/token"))
+        .userinfoEndpoint(URI.create("https://idp/userinfo"))
+        .jwksEndpoint(URI.create("https://idp/jwks"))
+        .clientId("c").clientSecret("s")
+        .validateAccessToken(false)
+        .build());
   }
 }

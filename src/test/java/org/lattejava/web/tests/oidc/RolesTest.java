@@ -5,6 +5,8 @@
 package org.lattejava.web.tests.oidc;
 
 import module java.base;
+import module java.net.http;
+import module org.lattejava.jwt;
 import module org.lattejava.web;
 import module org.testng;
 
@@ -28,11 +30,11 @@ public class RolesTest extends BaseOIDCTest {
                              return roles == null ? Set.of() : new HashSet<>(roles);
                            })
                            .build();
-    OIDC<?> keycloakOIDC = OIDC.create(config);
+    OIDC<String> keycloakOIDC = OIDC.ssr(config, JWT::subject);
     String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD, KEYCLOAK_APP_ID).accessToken();
 
     try (var web = new Web()) {
-      web.install(keycloakOIDC);
+      web.install(sessionEndpoints);
       web.prefix("/admin", p -> {
         p.install(keycloakOIDC.authenticated());
         p.install(keycloakOIDC.hasAnyRole("admin"));
@@ -46,17 +48,17 @@ public class RolesTest extends BaseOIDCTest {
 
   @Test(expectedExceptions = IllegalArgumentException.class)
   public void hasAllRoles_emptyVarargs_throws() {
-    oidc.hasAllRoles();
+    ssr.hasAllRoles();
   }
 
   @Test
   public void hasAllRoles_userAndModerator_passesForUser() throws Exception {
     String token = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
-        p.install(oidc.hasAllRoles("user", "moderator"));
+        p.install(ssr.authenticated());
+        p.install(ssr.hasAllRoles("user", "moderator"));
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -69,24 +71,28 @@ public class RolesTest extends BaseOIDCTest {
   public void hasAllRoles_userAndModerator_returns403ForAdmin() throws Exception {
     String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
-        p.install(oidc.hasAllRoles("user", "moderator"));
+        p.install(ssr.authenticated());
+        p.install(ssr.hasAllRoles("user", "moderator"));
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
 
-      assertEquals(get("/protected/page", "access_token=" + token).statusCode(), 403);
+      HttpResponse<String> res = get("/protected/page", "access_token=" + token);
+      assertEquals(res.statusCode(), 403);
+      // SSR forbidden invokes the forbiddenHandler which returns an HTML body
+      assertTrue(res.headers().firstValue("Content-Type").orElse("").contains("text/html"),
+          "Expected HTML forbidden body from SSR forbiddenHandler");
     }
   }
 
   @Test
   public void hasAllRoles_withoutAuthenticatedUpstream_returns401() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.hasAllRoles("user"));
+        p.install(spa.hasAllRoles("user"));
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -99,10 +105,10 @@ public class RolesTest extends BaseOIDCTest {
   public void hasAnyRole_admin_passesForAdmin() throws Exception {
     String token = FIXTURE.login(ADMIN_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/admin", p -> {
-        p.install(oidc.authenticated());
-        p.install(oidc.hasAnyRole("admin"));
+        p.install(ssr.authenticated());
+        p.install(ssr.hasAnyRole("admin"));
         p.get("/dashboard", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -115,29 +121,33 @@ public class RolesTest extends BaseOIDCTest {
   public void hasAnyRole_admin_returns403ForUser() throws Exception {
     String token = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/admin", p -> {
-        p.install(oidc.authenticated());
-        p.install(oidc.hasAnyRole("admin"));
+        p.install(ssr.authenticated());
+        p.install(ssr.hasAnyRole("admin"));
         p.get("/dashboard", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
 
-      assertEquals(get("/admin/dashboard", "access_token=" + token).statusCode(), 403);
+      HttpResponse<String> res = get("/admin/dashboard", "access_token=" + token);
+      assertEquals(res.statusCode(), 403);
+      // SSR forbidden invokes the forbiddenHandler which returns an HTML body
+      assertTrue(res.headers().firstValue("Content-Type").orElse("").contains("text/html"),
+          "Expected HTML forbidden body from SSR forbiddenHandler");
     }
   }
 
   @Test(expectedExceptions = IllegalArgumentException.class)
   public void hasAnyRole_emptyVarargs_throws() {
-    oidc.hasAnyRole();
+    ssr.hasAnyRole();
   }
 
   @Test
   public void hasAnyRole_withoutAuthenticatedUpstream_returns401() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/admin", p -> {
-        p.install(oidc.hasAnyRole("admin"));
+        p.install(spa.hasAnyRole("admin"));
         p.get("/dashboard", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);

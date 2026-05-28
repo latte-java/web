@@ -13,15 +13,17 @@ import module org.lattejava.web;
  * @author Brian Pontarelli
  */
 public class LogoutReturnHandler implements Handler {
-  private final OIDCConfig config;
+  private final BrowserSettings browser;
 
-  public LogoutReturnHandler(OIDCConfig config) {
-    this.config = config;
+  public LogoutReturnHandler(BrowserSettings browser) {
+    this.browser = browser;
   }
 
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) throws Exception {
-    Tools.clearAllCookies(req, res, config);
-    res.sendRedirect(config.postLogout());
+    browser.tokenWriter().clear(req, res);
+    Tools.clearCookie(req, res, browser.stateCookieName());
+    Tools.clearCookie(req, res, browser.returnToCookieName());
+    res.sendRedirect(browser.postLogoutPage());
   }
 }

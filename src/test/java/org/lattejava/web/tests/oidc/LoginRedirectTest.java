@@ -17,7 +17,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void authorizeURL_codeChallenge_matchesSHA256OfState() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/login", null);
@@ -38,7 +38,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void loginPath_appendsIdpHintToAuthorizeURL_whenProvided() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/login?idp_hint=11111111-2222-3333-4444-200000000001", null);
@@ -53,7 +53,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void loginPath_doesNotSetReturnToCookie_forAbsoluteURL() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       String evil = URLEncoder.encode("https://evil.com/", StandardCharsets.UTF_8);
@@ -66,7 +66,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void loginPath_doesNotSetReturnToCookie_forProtocolRelativeURL() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       String evil = URLEncoder.encode("//evil.com/path", StandardCharsets.UTF_8);
@@ -79,7 +79,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void loginPath_redirectsToAuthorizeURL_withRequiredParams() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/login", null);
@@ -104,7 +104,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void loginPath_setsReturnToCookie_forSafeRelativePath() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       String safe = URLEncoder.encode("/app/groups/foo/verify", StandardCharsets.UTF_8);
@@ -118,7 +118,7 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void loginPath_setsStateCookie_with44HexCharsAndTransientAttributes() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/login", null);
@@ -138,9 +138,9 @@ public class LoginRedirectTest extends BaseOIDCTest {
   @Test
   public void unauthenticatedRequest_redirectsToLoginPath_withReturnToCookie() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
+        p.install(ssr.authenticated());
         p.get("/foo", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);

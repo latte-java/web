@@ -20,11 +20,11 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
   public void activeToken_undecodable_returns401() throws Exception {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
       mock.onIntrospectEndpoint(200, "{\"active\":true}");
-      OIDC<?> api = OIDC.create(OIDCConfig.builder().issuer(mock.issuer()).clientId("c").clientSecret("s").build());
+      OIDC<?> mockApi = OIDC.api(OIDCConfig.builder().issuer(mock.issuer()).clientId("c").clientSecret("s").build());
 
       try (var web = new Web()) {
         web.prefix("/api", p -> {
-          p.install(api.apiAuthenticated());
+          p.install(mockApi.authenticated());
           p.get("/me", (_, res) -> res.setStatus(200));
         });
         web.start(PORT);
@@ -36,55 +36,26 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
     }
   }
 
-  @Test(expectedExceptions = IllegalStateException.class)
-  public void apiAuthenticated_withoutIntrospectionEndpoint_throws() {
-    oidc.apiAuthenticated();
-  }
-
   @Test
-  public void audienceMismatch_returns401() throws Exception {
+  public void customReader_honored() throws Exception {
     String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
-    OIDC<String> api = OIDC.create(configBuilder().apiAudience("some-other-audience").build(), JWT::subject);
-
-    try (var web = new Web()) {
-      web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
-        p.get("/me", (_, res) -> res.setStatus(200));
-      });
-      web.start(PORT);
-
-      HttpResponse<String> res = send("/api/me", Map.of("Authorization", "Bearer " + accessToken));
-      assertEquals(res.statusCode(), 401);
-    }
-  }
-
-  @Test
-  public void audienceMatch_callsHandler() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
-    OIDC<String> api = OIDC.create(configBuilder().apiAudience(STANDARD_APP_ID).build(), JWT::subject);
-
-    try (var web = new Web()) {
-      web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
-        p.get("/me", (_, res) -> res.setStatus(200));
-      });
-      web.start(PORT);
-
-      HttpResponse<String> res = send("/api/me", Map.of("Authorization", "Bearer " + accessToken));
-      assertEquals(res.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void customExtractor_honored() throws Exception {
-    String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
-    OIDC<String> api = OIDC.create(
-        configBuilder().apiTokenExtractor(req -> new Tokens(req.getHeader("X-My-Access"), null, null, null)).build(),
+    // Use a custom APISettings with a custom token reader that reads from X-My-Access header. The settings object
+    // itself does not model header names — the reader does.
+    var apiSettings = APISettings.builder()
+                                 .tokenReader(new HeaderTokenReader("X-My-Access", "X-Refresh-Token"))
+                                 .build();
+    OIDC<String> customApi = OIDC.api(
+        OIDCConfig.builder()
+                  .issuer(STANDARD_ISSUER)
+                  .clientId(STANDARD_APP_ID)
+                  .clientSecret(STANDARD_APP_SECRET)
+                  .build(),
+        apiSettings,
         JWT::subject);
 
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
+        p.install(customApi.authenticated());
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -96,10 +67,10 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void inactiveToken_noRefreshToken_returns401() throws Exception {
-    OIDC<String> api = apiOIDC();
+    OIDC<String> apiOIDC = apiOIDC();
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
+        p.install(apiOIDC.authenticated());
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -114,11 +85,11 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
       mock.onIntrospectEndpoint(200, "{\"active\":false}");
       mock.onTokenEndpoint(400, "{\"error\":\"invalid_grant\"}");
-      OIDC<?> api = OIDC.create(OIDCConfig.builder().issuer(mock.issuer()).clientId("c").clientSecret("s").build());
+      OIDC<?> mockApi = OIDC.api(OIDCConfig.builder().issuer(mock.issuer()).clientId("c").clientSecret("s").build());
 
       try (var web = new Web()) {
         web.prefix("/api", p -> {
-          p.install(api.apiAuthenticated());
+          p.install(mockApi.authenticated());
           p.get("/me", (_, res) -> res.setStatus(200));
         });
         web.start(PORT);
@@ -134,11 +105,11 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
   public void inactiveToken_validRefresh_refreshesAndWritesHeader() throws Exception {
     Tokens tokens = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID);
     assertNotNull(tokens.refreshToken());
-    OIDC<String> api = apiOIDC();
+    OIDC<String> apiOIDC = apiOIDC();
 
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
+        p.install(apiOIDC.authenticated());
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -156,11 +127,17 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
   public void introspectionNetworkError_returns503() throws Exception {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
       mock.onIntrospectEndpoint(500, "{\"error\":\"server_error\"}");
-      OIDC<?> api = OIDC.create(OIDCConfig.builder().issuer(mock.issuer()).clientId("c").clientSecret("s").build());
+      // Use validateAccessToken=false so that every non-null token reaches the introspect endpoint.
+      OIDC<?> mockApi = OIDC.api(OIDCConfig.builder()
+                                           .issuer(mock.issuer())
+                                           .clientId("c")
+                                           .clientSecret("s")
+                                           .validateAccessToken(false)
+                                           .build());
 
       try (var web = new Web()) {
         web.prefix("/api", p -> {
-          p.install(api.apiAuthenticated());
+          p.install(mockApi.authenticated());
           p.get("/me", (_, res) -> res.setStatus(200));
         });
         web.start(PORT);
@@ -173,10 +150,10 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
 
   @Test
   public void missingAccessToken_returns401() throws Exception {
-    OIDC<String> api = apiOIDC();
+    OIDC<String> apiOIDC = apiOIDC();
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
+        p.install(apiOIDC.authenticated());
         p.get("/me", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -191,11 +168,11 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
       mock.onIntrospectEndpoint(200, "{\"active\":false}");
       mock.onTokenEndpoint(200, "{\"access_token\":\"refreshed.but.undecodable\",\"expires_in\":3600}");
-      OIDC<?> api = OIDC.create(OIDCConfig.builder().issuer(mock.issuer()).clientId("c").clientSecret("s").build());
+      OIDC<?> mockApi = OIDC.api(OIDCConfig.builder().issuer(mock.issuer()).clientId("c").clientSecret("s").build());
 
       try (var web = new Web()) {
         web.prefix("/api", p -> {
-          p.install(api.apiAuthenticated());
+          p.install(mockApi.authenticated());
           p.get("/me", (_, res) -> res.setStatus(200));
         });
         web.start(PORT);
@@ -211,14 +188,14 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
   @Test
   public void validAccessToken_bindsJWT_callsHandler() throws Exception {
     String accessToken = FIXTURE.login(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID).accessToken();
-    OIDC<String> api = apiOIDC();
+    OIDC<String> apiOIDC = apiOIDC();
 
     try (var web = new Web()) {
       web.prefix("/api", p -> {
-        p.install(api.apiAuthenticated());
+        p.install(apiOIDC.authenticated());
         p.get("/me", (_, res) -> {
           res.setStatus(200);
-          res.getWriter().write(api.user());
+          res.getWriter().write(apiOIDC.user());
         });
       });
       web.start(PORT);
@@ -230,15 +207,12 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
   }
 
   private OIDC<String> apiOIDC() {
-    return OIDC.create(configBuilder().build(), JWT::subject);
-  }
-
-  private OIDCConfig.Builder configBuilder() {
-    return OIDCConfig.builder()
-                     .issuer(STANDARD_ISSUER)
-                     .clientId(STANDARD_APP_ID)
-                     .clientSecret(STANDARD_APP_SECRET)
-                     .introspectionEndpoint(URI.create(FA_BASE_URL + "/oauth2/introspect"));
+    return OIDC.api(OIDCConfig.builder()
+                              .issuer(STANDARD_ISSUER)
+                              .clientId(STANDARD_APP_ID)
+                              .clientSecret(STANDARD_APP_SECRET)
+                              .introspectionEndpoint(URI.create(FA_BASE_URL + "/oauth2/introspect"))
+                              .build(), JWT::subject);
   }
 
   private HttpResponse<String> send(String path, Map<String, String> headers) throws Exception {

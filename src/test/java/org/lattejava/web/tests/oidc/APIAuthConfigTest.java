@@ -14,19 +14,6 @@ import static org.testng.Assert.*;
 
 public class APIAuthConfigTest {
   @Test
-  public void apiExtractorAndWriter_defaultsNonNull() {
-    var config = OIDCConfig.builder()
-                           .authorizeEndpoint(URI.create("https://idp/authorize"))
-                           .tokenEndpoint(URI.create("https://idp/token"))
-                           .userinfoEndpoint(URI.create("https://idp/userinfo"))
-                           .jwksEndpoint(URI.create("https://idp/jwks"))
-                           .clientId("c").clientSecret("s")
-                           .build();
-    assertNotNull(config.apiTokenExtractor());
-    assertNotNull(config.apiTokenWriter());
-  }
-
-  @Test
   public void introspectionEndpoint_discoveredWhenNull() {
     try (MockIdP mock = new MockIdP(BaseWebTest.PORT + 7)) {
       var config = OIDCConfig.builder()

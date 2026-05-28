@@ -7,6 +7,7 @@ package org.lattejava.web.tests.oidc;
 import module java.base;
 import module java.net.http;
 import module org.lattejava.http;
+import module org.lattejava.jwt;
 import module org.lattejava.web;
 import module org.testng;
 
@@ -16,21 +17,28 @@ import static org.testng.Assert.*;
 public class RefreshTest extends BaseOIDCTest {
   private static final int MOCK_PORT = 9099;
 
-  private static OIDC<?> fastOIDC;
-  private static OIDC<?> rotatingOIDC;
+  private static OIDC<JWT> fastOIDC;
+  private static Middleware fastSessionEndpoints;
+  private static OIDC<JWT> rotatingOIDC;
+  private static Middleware rotatingSessionEndpoints;
 
   @BeforeClass
   public static void setupOIDC() {
-    fastOIDC = OIDC.create(OIDCConfig.builder()
-                                     .issuer(STANDARD_ISSUER)
-                                     .clientId(FAST_APP_ID)
-                                     .clientSecret(FAST_APP_SECRET)
-                                     .build());
-    rotatingOIDC = OIDC.create(OIDCConfig.builder()
-                                         .issuer(STANDARD_ISSUER)
-                                         .clientId(ROTATING_APP_ID)
-                                         .clientSecret(ROTATING_APP_SECRET)
-                                         .build());
+    var fastConfig = OIDCConfig.builder()
+                               .issuer(STANDARD_ISSUER)
+                               .clientId(FAST_APP_ID)
+                               .clientSecret(FAST_APP_SECRET)
+                               .build();
+    fastOIDC = OIDC.ssr(fastConfig);
+    fastSessionEndpoints = OIDC.sessionEndpoints(fastConfig);
+
+    var rotatingConfig = OIDCConfig.builder()
+                                   .issuer(STANDARD_ISSUER)
+                                   .clientId(ROTATING_APP_ID)
+                                   .clientSecret(ROTATING_APP_SECRET)
+                                   .build();
+    rotatingOIDC = OIDC.ssr(rotatingConfig);
+    rotatingSessionEndpoints = OIDC.sessionEndpoints(rotatingConfig);
   }
 
   private static void assertLoginRedirect(HttpResponse<String> res) {
@@ -48,7 +56,7 @@ public class RefreshTest extends BaseOIDCTest {
     Thread.sleep(2000);
 
     try (var web = new Web()) {
-      web.install(fastOIDC);
+      web.install(fastSessionEndpoints);
       web.prefix("/protected", p -> {
         p.install(fastOIDC.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
@@ -67,9 +75,9 @@ public class RefreshTest extends BaseOIDCTest {
   @Test
   public void invalidAccessToken_invalidRefreshToken_clearsAuthCookies_redirectsToLogin() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
+        p.install(ssr.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -88,16 +96,16 @@ public class RefreshTest extends BaseOIDCTest {
   @Test
   public void invalidAccessToken_noRefreshTokenCookie_clearsAuthCookies_redirectsToLogin() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
+        p.install(ssr.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
 
       // With no refresh token cookie the first hop is now the SameSite cross-site interstitial (covered by
       // CrossSiteRefreshTest); the guard param represents the same-site follow-up where no refresh is possible.
-      HttpResponse<String> res = get("/protected/page?" + Authenticated.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
+      HttpResponse<String> res = get("/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
       assertLoginRedirect(res);
     }
   }
@@ -108,7 +116,7 @@ public class RefreshTest extends BaseOIDCTest {
     assertNotNull(tokens.refreshToken());
 
     try (var web = new Web()) {
-      web.install(rotatingOIDC);
+      web.install(rotatingSessionEndpoints);
       web.prefix("/protected", p -> {
         p.install(rotatingOIDC.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
@@ -132,9 +140,9 @@ public class RefreshTest extends BaseOIDCTest {
     assertNotNull(tokens.idToken());
 
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.prefix("/protected", p -> {
-        p.install(oidc.authenticated());
+        p.install(ssr.authenticated());
         p.get("/page", (_, res) -> res.setStatus(200));
       });
       web.start(PORT);
@@ -151,15 +159,19 @@ public class RefreshTest extends BaseOIDCTest {
   @Test
   public void tokenEndpointReturns5xx_clearsAuthCookies_redirectsToLogin() throws Exception {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
-      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
-                                               .issuer(mock.issuer())
-                                               .clientId("c")
-                                               .clientSecret("s")
-                                               .build());
+      OIDC<JWT> mockOIDC = OIDC.ssr(OIDCConfig.builder()
+                                              .issuer(mock.issuer())
+                                              .clientId("c")
+                                              .clientSecret("s")
+                                              .build());
       mock.onTokenEndpoint(500, "{\"error\":\"server_error\"}");
 
       try (var web = new Web()) {
-        web.install(mockOIDC);
+        web.install(OIDC.sessionEndpoints(OIDCConfig.builder()
+                                                    .issuer(mock.issuer())
+                                                    .clientId("c")
+                                                    .clientSecret("s")
+                                                    .build()));
         web.prefix("/protected", p -> {
           p.install(mockOIDC.authenticated());
           p.get("/page", (_, res) -> res.setStatus(200));

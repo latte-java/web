@@ -16,6 +16,23 @@ import static org.testng.Assert.*;
 public class CallbackTest extends BaseOIDCTest {
   private static final int MOCK_PORT = 9099;
 
+  private static void assertAuthCookies(HttpResponse<String> res) {
+    Cookie access = getCookie(res, "access_token");
+    assertNotNull(access, "Expected access_token cookie");
+    assertTrue(access.isHttpOnly(), "access_token should be HttpOnly");
+    assertExpiresIn(access.getMaxAge());
+
+    Cookie id = getCookie(res, "id_token");
+    assertNotNull(id, "Expected id_token cookie");
+    assertFalse(id.isHttpOnly(), "id_token should not be HttpOnly (SPA reads claims)");
+    assertExpiresIn(id.getMaxAge());
+
+    Cookie refresh = getCookie(res, "refresh_token");
+    assertNotNull(refresh, "Expected refresh_token cookie");
+    assertTrue(refresh.isHttpOnly(), "refresh_token should be HttpOnly");
+    assertEquals(refresh.getMaxAge(), Long.valueOf(Duration.ofDays(30).toSeconds()));
+  }
+
   private static void assertExpiresIn(Long actual) {
     assertNotNull(actual);
     assertTrue(actual >= 3600L - 5 && actual <= 3600L,
@@ -31,11 +48,10 @@ public class CallbackTest extends BaseOIDCTest {
     assertEquals(params.get("oidc_error_description"), expectedDescription);
   }
 
-
   @Test
   public void blankCode_redirectsToLandingWithOIDCError() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/return?state=abc&code=", "oidc_state=abc");
@@ -46,7 +62,7 @@ public class CallbackTest extends BaseOIDCTest {
   @Test
   public void errorQueryParam_clearsCookies_redirectsToLanding_withOIDCErrorParam() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/return?error=access_denied&error_description=user+cancelled",
@@ -64,7 +80,7 @@ public class CallbackTest extends BaseOIDCTest {
   @Test
   public void missingCodeQueryParam_redirectsToLandingWithOIDCError() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/return?state=abc", "oidc_state=abc");
@@ -75,7 +91,7 @@ public class CallbackTest extends BaseOIDCTest {
   @Test
   public void missingStateCookie_redirectsToLandingWithOIDCError() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/return?state=abc&code=xyz", null);
@@ -86,7 +102,7 @@ public class CallbackTest extends BaseOIDCTest {
   @Test
   public void stateCookieMismatch_redirectsToLandingWithOIDCError() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       HttpResponse<String> res = get("/oidc/return?state=abc&code=xyz", "oidc_state=different");
@@ -97,7 +113,7 @@ public class CallbackTest extends BaseOIDCTest {
   @Test
   public void successfulCodeExchange_redirectsToReturnToCookie_whenSet() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
@@ -106,13 +122,15 @@ public class CallbackTest extends BaseOIDCTest {
           "oidc_state=" + auth.state() + "; oidc_return_to=" + BASE_URL + "/dashboard");
       assertEquals(res.statusCode(), 302);
       assertEquals(res.headers().firstValue("Location").orElse(null), BASE_URL + "/dashboard");
+
+      assertAuthCookies(res);
     }
   }
 
   @Test
   public void successfulCodeExchange_setsAuthCookies_andRedirectsToPostLoginLanding() throws Exception {
     try (var web = new Web()) {
-      web.install(oidc);
+      web.install(sessionEndpoints);
       web.start(PORT);
 
       var auth = FIXTURE.fetchAuthorizationCode(USER_EMAIL, DEFAULT_PASSWORD, STANDARD_APP_ID, BASE_URL + "/oidc/return");
@@ -122,35 +140,23 @@ public class CallbackTest extends BaseOIDCTest {
       assertEquals(res.statusCode(), 302);
       assertEquals(res.headers().firstValue("Location").orElse(null), "/");
 
-      Cookie access = getCookie(res, "access_token");
-      assertNotNull(access, "Expected access_token cookie");
-      assertTrue(access.isHttpOnly(), "access_token should be HttpOnly");
-      assertExpiresIn(access.getMaxAge());
-
-      Cookie id = getCookie(res, "id_token");
-      assertNotNull(id, "Expected id_token cookie");
-      assertFalse(id.isHttpOnly(), "id_token should not be HttpOnly (SPA reads claims)");
-      assertExpiresIn(id.getMaxAge());
-
-      Cookie refresh = getCookie(res, "refresh_token");
-      assertNotNull(refresh, "Expected refresh_token cookie");
-      assertTrue(refresh.isHttpOnly(), "refresh_token should be HttpOnly");
-      assertEquals(refresh.getMaxAge(), Long.valueOf(Duration.ofDays(30).toSeconds()));
+      assertAuthCookies(res);
     }
   }
 
   @Test
   public void tokenEndpointReturnsBadIDToken_redirectsWithInvalidIDTokenError() throws Exception {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
-      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
-                                               .issuer(mock.issuer())
-                                               .clientId("c")
-                                               .clientSecret("s")
-                                               .build());
+      var mockConfig = OIDCConfig.builder()
+                                 .issuer(mock.issuer())
+                                 .clientId("c")
+                                 .clientSecret("s")
+                                 .build();
+      Middleware mockSessionEndpoints = OIDC.sessionEndpoints(mockConfig);
       mock.onTokenEndpoint(200, "{\"access_token\":\"opaque\",\"id_token\":\"not.a.jwt\",\"expires_in\":3600}");
 
       try (var web = new Web()) {
-        web.install(mockOIDC);
+        web.install(mockSessionEndpoints);
         web.start(PORT);
 
         HttpResponse<String> res = get("/oidc/return?code=code&state=abc", "oidc_state=abc");
@@ -162,15 +168,16 @@ public class CallbackTest extends BaseOIDCTest {
   @Test
   public void tokenEndpointReturnsMissingTokens_redirectsWithTokenExchangeFailedError() throws Exception {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
-      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
-                                               .issuer(mock.issuer())
-                                               .clientId("c")
-                                               .clientSecret("s")
-                                               .build());
+      var mockConfig = OIDCConfig.builder()
+                                 .issuer(mock.issuer())
+                                 .clientId("c")
+                                 .clientSecret("s")
+                                 .build();
+      Middleware mockSessionEndpoints = OIDC.sessionEndpoints(mockConfig);
       mock.onTokenEndpoint(200, "{\"expires_in\":3600}");
 
       try (var web = new Web()) {
-        web.install(mockOIDC);
+        web.install(mockSessionEndpoints);
         web.start(PORT);
 
         HttpResponse<String> res = get("/oidc/return?code=code&state=abc", "oidc_state=abc");
@@ -182,15 +189,16 @@ public class CallbackTest extends BaseOIDCTest {
   @Test
   public void tokenEndpointReturnsNon2xx_redirectsWithTokenExchangeFailedError() throws Exception {
     try (MockIdP mock = new MockIdP(MOCK_PORT)) {
-      OIDC<?> mockOIDC = OIDC.create(OIDCConfig.builder()
-                                               .issuer(mock.issuer())
-                                               .clientId("c")
-                                               .clientSecret("s")
-                                               .build());
+      var mockConfig = OIDCConfig.builder()
+                                 .issuer(mock.issuer())
+                                 .clientId("c")
+                                 .clientSecret("s")
+                                 .build();
+      Middleware mockSessionEndpoints = OIDC.sessionEndpoints(mockConfig);
       mock.onTokenEndpoint(400, "{\"error\":\"invalid_request\"}");
 
       try (var web = new Web()) {
-        web.install(mockOIDC);
+        web.install(mockSessionEndpoints);
         web.start(PORT);
 
         HttpResponse<String> res = get("/oidc/return?code=code&state=abc", "oidc_state=abc");

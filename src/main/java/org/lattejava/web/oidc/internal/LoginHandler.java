@@ -9,17 +9,19 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * A handler that redirects the user to the OIDC provider's authorization endpoint. This handles PCKE as well.
+ * A handler that redirects the user to the OIDC provider's authorization endpoint. This handles PKCE as well.
  *
  * @author Brian Pontarelli
  */
 public class LoginHandler implements Handler {
   private static final SecureRandom RANDOM = new SecureRandom();
 
+  private final BrowserSettings browser;
   private final OIDCConfig config;
 
-  public LoginHandler(OIDCConfig config) {
+  public LoginHandler(OIDCConfig config, BrowserSettings browser) {
     this.config = config;
+    this.browser = browser;
   }
 
   @Override
@@ -29,14 +31,14 @@ public class LoginHandler implements Handler {
     String state = HexFormat.of().formatHex(stateBytes);
     String codeChallenge = Tools.computeCodeChallenge(state);
 
-    Tools.addTransientCookie(req, res, config.stateCookieName(), state);
+    Tools.addTransientCookie(req, res, browser.stateCookieName(), state);
 
     String returnTo = req.getURLParameter("return_to");
     if (isSafeReturnTo(returnTo)) {
-      Tools.addTransientCookie(req, res, config.returnToCookieName(), returnTo);
+      Tools.addTransientCookie(req, res, browser.returnToCookieName(), returnTo);
     }
 
-    URI redirectURI = config.fullRedirectURI(req);
+    URI redirectURI = URI.create(req.getBaseURL() + browser.callbackPath());
     StringBuilder url = new StringBuilder(config.authorizeEndpoint().toString());
     url.append(url.indexOf("?") < 0 ? '?' : '&');
     url.append("response_type=code");

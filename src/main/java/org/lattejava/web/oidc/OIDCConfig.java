@@ -7,10 +7,11 @@ package org.lattejava.web.oidc;
 import module java.base;
 import module org.lattejava.http;
 import module org.lattejava.jwt;
-import module org.lattejava.web;
+
+import org.lattejava.web.oidc.internal.Tools;
 
 /**
- * Configuration for an {@link OIDC} instance. Use {@link #builder()} to construct.
+ * Configuration for an {@link OIDC} instance representing the IdP relationship. Use {@link #builder()} to construct.
  * <p>
  * Either {@code issuer} (for OIDC Discovery) or all four endpoint URLs (authorize, token, userinfo, jwks) must be
  * provided. Mixing is allowed; explicit endpoints override discovered ones.
@@ -29,23 +30,7 @@ public record OIDCConfig(
     String clientSecret,
     List<String> scopes,
     Function<JWT, Set<String>> roleExtractor,
-    String apiAudience,
-    TokenExtractor apiTokenExtractor,
-    TokenWriter apiTokenWriter,
-    boolean validateAccessToken,
-    String errorPage,
-    String postLoginPage,
-    String postLogout,
-    String loginPath,
-    String callbackPath,
-    String logoutPath,
-    String logoutReturnPath,
-    String stateCookieName,
-    String accessTokenCookieName,
-    String refreshTokenCookieName,
-    String idTokenCookieName,
-    String returnToCookieName,
-    Duration refreshTokenMaxAge
+    boolean validateAccessToken
 ) {
 
   /**
@@ -56,72 +41,26 @@ public record OIDCConfig(
   }
 
   /**
-   * Builds the full redirect URI for the OIDC callback using the current URL and the path configured.
-   *
-   * @param req The current HTTP request.
-   * @return The full redirect URI.
-   */
-  public URI fullRedirectURI(HTTPRequest req) {
-    return URI.create(req.getBaseURL() + callbackPath());
-  }
-
-  /**
    * A builder for {@link OIDCConfig}. All optional fields are pre-populated with sensible defaults; required fields
    * (issuer or all four endpoints, clientId, clientSecret) must be set explicitly. Call {@link #build()} to produce an
-   * immutable config — validation runs at build time and throws {@link IllegalArgumentException} on violation.
+   * immutable config — validation runs at build time and throws on violation.
    */
   public static class Builder {
-    private String accessTokenCookieName = "access_token";
-    private String apiAudience;
-    private TokenExtractor apiTokenExtractor = new TokenExtractor.Default();
-    private TokenWriter apiTokenWriter = new TokenWriter.Default();
     private URI authorizeEndpoint;
-    private String callbackPath = "/oidc/return";
     private String clientId;
     private String clientSecret;
-    private String errorPage = "/";
-    private String idTokenCookieName = "id_token";
     private URI introspectionEndpoint;
     private String issuer;
     private URI jwksEndpoint;
-    private String loginPath = "/login";
     private URI logoutEndpoint;
-    private String logoutPath = "/logout";
-    private String logoutReturnPath = "/oidc/logout-return";
-    private String postLoginPage = "/";
-    private String postLogout = "/";
-    private String refreshTokenCookieName = "refresh_token";
-    private Duration refreshTokenMaxAge = Duration.ofDays(30);
-    private String returnToCookieName = "oidc_return_to";
     private Function<JWT, Set<String>> roleExtractor = jwt -> {
       var roles = jwt.getList("roles", String.class);
       return new HashSet<>(roles);
     };
     private List<String> scopes = List.of("openid", "profile", "email", "offline_access");
-    private String stateCookieName = "oidc_state";
     private URI tokenEndpoint;
     private URI userinfoEndpoint;
     private boolean validateAccessToken = true;
-
-    public Builder accessTokenCookieName(String value) {
-      this.accessTokenCookieName = value;
-      return this;
-    }
-
-    public Builder apiAudience(String value) {
-      this.apiAudience = value;
-      return this;
-    }
-
-    public Builder apiTokenExtractor(TokenExtractor value) {
-      this.apiTokenExtractor = value;
-      return this;
-    }
-
-    public Builder apiTokenWriter(TokenWriter value) {
-      this.apiTokenWriter = value;
-      return this;
-    }
 
     public Builder authorizeEndpoint(URI value) {
       this.authorizeEndpoint = value;
@@ -159,59 +98,28 @@ public record OIDCConfig(
         throw new IllegalArgumentException("roleExtractor must not be null");
       }
 
-      Set<String> cookieNames = new HashSet<>();
-      for (String name : List.of(stateCookieName, accessTokenCookieName, refreshTokenCookieName,
-          idTokenCookieName, returnToCookieName)) {
-        if (name == null || name.isBlank()) {
-          throw new IllegalArgumentException("cookie names must not be null or blank");
-        }
-
-        if (!cookieNames.add(name)) {
-          throw new IllegalArgumentException("duplicate cookie name: [" + name + "]");
-        }
-      }
-
-      Set<String> paths = new HashSet<>();
-      for (String path : List.of(callbackPath, logoutPath, logoutReturnPath)) {
-        if (path == null || !path.startsWith("/")) {
-          throw new IllegalArgumentException("path must start with [/]: [" + path + "]");
-        }
-
-        if (!paths.add(path)) {
-          throw new IllegalArgumentException("duplicate path: [" + path + "]");
-        }
-      }
-
-      Tools.requireSecureURI("issuer", issuer == null ? null : URI.create(issuer));
       Tools.requireSecureURI("authorizeEndpoint", authorizeEndpoint);
       Tools.requireSecureURI("introspectionEndpoint", introspectionEndpoint);
+      Tools.requireSecureURI("issuer", issuer == null ? null : URI.create(issuer));
       Tools.requireSecureURI("jwksEndpoint", jwksEndpoint);
       Tools.requireSecureURI("logoutEndpoint", logoutEndpoint);
       Tools.requireSecureURI("tokenEndpoint", tokenEndpoint);
       Tools.requireSecureURI("userinfoEndpoint", userinfoEndpoint);
-      Tools.requireSecureURI("logoutEndpoint", logoutEndpoint);
 
       fillIn();
 
       if (authorizeEndpoint == null || tokenEndpoint == null || jwksEndpoint == null) {
-        throw new IllegalStateException("Required endpoint unresolved — set issuer or provide explicit authorize/token/jwks endpoints");
+        throw new IllegalStateException(
+            "Required endpoint unresolved — set issuer or provide explicit authorize/token/jwks endpoints");
       }
 
       if (!validateAccessToken && introspectionEndpoint == null) {
-        throw new IllegalStateException("validateAccessToken=false requires introspectionEndpoint — set explicitly or provide issuer for discovery");
+        throw new IllegalStateException(
+            "validateAccessToken=false requires introspectionEndpoint — set explicitly or provide issuer for discovery");
       }
 
       return new OIDCConfig(issuer, authorizeEndpoint, tokenEndpoint, userinfoEndpoint, jwksEndpoint,
-          logoutEndpoint, introspectionEndpoint, clientId, clientSecret, scopes, roleExtractor,
-          apiAudience, apiTokenExtractor, apiTokenWriter,
-          validateAccessToken, errorPage, postLoginPage, postLogout, loginPath, callbackPath, logoutPath,
-          logoutReturnPath, stateCookieName, accessTokenCookieName, refreshTokenCookieName,
-          idTokenCookieName, returnToCookieName, refreshTokenMaxAge);
-    }
-
-    public Builder callbackPath(String value) {
-      this.callbackPath = value;
-      return this;
+          logoutEndpoint, introspectionEndpoint, clientId, clientSecret, scopes, roleExtractor, validateAccessToken);
     }
 
     public Builder clientId(String value) {
@@ -221,16 +129,6 @@ public record OIDCConfig(
 
     public Builder clientSecret(String value) {
       this.clientSecret = value;
-      return this;
-    }
-
-    public Builder errorPage(String value) {
-      this.errorPage = value;
-      return this;
-    }
-
-    public Builder idTokenCookieName(String value) {
-      this.idTokenCookieName = value;
       return this;
     }
 
@@ -249,48 +147,8 @@ public record OIDCConfig(
       return this;
     }
 
-    public Builder loginPath(String value) {
-      this.loginPath = value;
-      return this;
-    }
-
     public Builder logoutEndpoint(URI value) {
       this.logoutEndpoint = value;
-      return this;
-    }
-
-    public Builder logoutPath(String value) {
-      this.logoutPath = value;
-      return this;
-    }
-
-    public Builder logoutReturnPath(String value) {
-      this.logoutReturnPath = value;
-      return this;
-    }
-
-    public Builder postLoginPage(String value) {
-      this.postLoginPage = value;
-      return this;
-    }
-
-    public Builder postLogout(String value) {
-      this.postLogout = value;
-      return this;
-    }
-
-    public Builder refreshTokenCookieName(String value) {
-      this.refreshTokenCookieName = value;
-      return this;
-    }
-
-    public Builder refreshTokenMaxAge(Duration value) {
-      this.refreshTokenMaxAge = value;
-      return this;
-    }
-
-    public Builder returnToCookieName(String value) {
-      this.returnToCookieName = value;
       return this;
     }
 
@@ -301,11 +159,6 @@ public record OIDCConfig(
 
     public Builder scopes(List<String> value) {
       this.scopes = value;
-      return this;
-    }
-
-    public Builder stateCookieName(String value) {
-      this.stateCookieName = value;
       return this;
     }
 

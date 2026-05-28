@@ -10,37 +10,54 @@ import module java.net.http;
 import module org.lattejava.http;
 import module org.lattejava.web;
 
+import org.lattejava.web.oidc.BrowserSettings;
+
 /**
  * Test fixture for driving Open ID Connect login and logout against a real provider so that tests can run against a
  * running {@link Web} application with an authenticated user (or not).
  * <p>
  * The fixture walks the OAuth2 authorization-code flow against {@link OIDCConfig#authorizeEndpoint()} as a browser
  * would, exchanges the resulting code at {@link OIDCConfig#tokenEndpoint()} using HTTP Basic with
- * {@link OIDCConfig#clientSecret()}, and stores the issued tokens in the {@link WebTest}'s cookie jar under the names
- * configured on the {@link OIDCConfig} ({@code accessTokenCookieName}, {@code idTokenCookieName},
- * {@code refreshTokenCookieName}). Subsequent requests through the same {@link WebTest} are authenticated as the
- * logged-in user. {@link #logout()} removes those cookies from the jar.
+ * {@link OIDCConfig#clientSecret()}, and stores the issued tokens in the {@link WebTest}'s cookie jar under the default
+ * cookie names ({@code access_token}, {@code refresh_token}, {@code id_token}). Subsequent requests through the same
+ * {@link WebTest} are authenticated as the logged-in user. {@link #logout()} removes those cookies from the jar.
  * <p>
  * The provider is assumed to already be running and configured to accept the application identified by
  * {@link OIDCConfig#clientId()}. The OAuth client must be registered with a redirect URI of
- * {@code http://localhost:<webTest.port><config.callbackPath()>}.
+ * {@code http://localhost:<webTest.port><browser.callbackPath()>}.
  *
  * @author Brian Pontarelli
  */
 public class OIDCTestFixture {
+  private static final String ACCESS_COOKIE_NAME = "access_token";
+  private static final String ID_COOKIE_NAME = "id_token";
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final String REFRESH_COOKIE_NAME = "refresh_token";
+  private final BrowserSettings browser;
   private final OIDCConfig config;
   private final WebTest webTest;
 
   /**
-   * Creates a new fixture bound to the given test client and OIDC configuration.
+   * Creates a new fixture with default {@link BrowserSettings}.
    *
    * @param webTest The test client whose cookie jar will hold auth cookies after a successful {@link #login}.
    * @param config  The OIDC configuration matching the application under test.
    */
   public OIDCTestFixture(WebTest webTest, OIDCConfig config) {
+    this(webTest, config, BrowserSettings.builder().build());
+  }
+
+  /**
+   * Creates a new fixture bound to the given test client, OIDC configuration, and browser settings.
+   *
+   * @param webTest  The test client whose cookie jar will hold auth cookies after a successful {@link #login}.
+   * @param config   The OIDC configuration matching the application under test.
+   * @param browser  The browser settings that determine cookie names and paths.
+   */
+  public OIDCTestFixture(WebTest webTest, OIDCConfig config, BrowserSettings browser) {
     this.webTest = webTest;
     this.config = config;
+    this.browser = browser;
   }
 
   private static String formEncode(Map<String, String> form) {
@@ -120,7 +137,7 @@ public class OIDCTestFixture {
    * @throws Exception If the OAuth flow or token exchange fails.
    */
   public Tokens login(String email, String password, String applicationId) throws Exception {
-    String redirectURI = "http://localhost:" + webTest.port + config.callbackPath();
+    String redirectURI = "http://localhost:" + webTest.port + browser.callbackPath();
     AuthorizationCode auth = fetchAuthorizationCode(email, password, applicationId, redirectURI);
 
     String body = formEncode(Map.of(
@@ -150,18 +167,18 @@ public class OIDCTestFixture {
       }
 
       String accessToken = access.asText();
-      webTest.cookies.add(new Cookie(config.accessTokenCookieName(), accessToken));
+      webTest.cookies.add(new Cookie(ACCESS_COOKIE_NAME, accessToken));
 
       JsonNode id = json.get("id_token");
       String idToken = id != null && !id.isNull() ? id.asText() : null;
       if (idToken != null) {
-        webTest.cookies.add(new Cookie(config.idTokenCookieName(), idToken));
+        webTest.cookies.add(new Cookie(ID_COOKIE_NAME, idToken));
       }
 
       JsonNode refresh = json.get("refresh_token");
       String refreshToken = refresh != null && !refresh.isNull() ? refresh.asText() : null;
       if (refreshToken != null) {
-        webTest.cookies.add(new Cookie(config.refreshTokenCookieName(), refreshToken));
+        webTest.cookies.add(new Cookie(REFRESH_COOKIE_NAME, refreshToken));
       }
 
       JsonNode expires = json.get("expires_in");
@@ -176,9 +193,9 @@ public class OIDCTestFixture {
    * through the test client are unauthenticated.
    */
   public void logout() {
-    webTest.cookies.cookies.remove(config.accessTokenCookieName());
-    webTest.cookies.cookies.remove(config.idTokenCookieName());
-    webTest.cookies.cookies.remove(config.refreshTokenCookieName());
+    webTest.cookies.cookies.remove(ACCESS_COOKIE_NAME);
+    webTest.cookies.cookies.remove(ID_COOKIE_NAME);
+    webTest.cookies.cookies.remove(REFRESH_COOKIE_NAME);
   }
 
   /**

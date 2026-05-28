@@ -32,13 +32,26 @@ public class Tools {
   }
 
   /**
-   * Sets all the auth cookies using the correct settings for each. If any are null, they are not set. This ensures that
-   * the code doesn't drift and set invalid auth cookies.
+   * Sets all the auth cookies using explicit names and max-age. If any token is null, it is not set. Cookie policy
+   * mirrors the OIDCConfig overload: id/access use SameSite=Lax; refresh uses SameSite=Strict (default) with the
+   * supplied max-age.
+   *
+   * @param req                The current request.
+   * @param res                The response.
+   * @param accessTokenName    The name of the access token cookie.
+   * @param refreshTokenName   The name of the refresh token cookie.
+   * @param idTokenName        The name of the id token cookie.
+   * @param refreshTokenMaxAge The max-age for the refresh token cookie.
+   * @param idToken            The id token value, or {@code null}.
+   * @param accessToken        The access token value, or {@code null}.
+   * @param refreshToken       The refresh token value, or {@code null}.
+   * @param expirySeconds      The max-age in seconds for the id and access token cookies.
    */
-  public static void addAuthCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config, String idToken,
-                                    String accessToken, String refreshToken, long expirySeconds) {
+  public static void addAuthCookies(HTTPRequest req, HTTPResponse res, String accessTokenName, String refreshTokenName,
+                                    String idTokenName, Duration refreshTokenMaxAge, String idToken, String accessToken,
+                                    String refreshToken, long expirySeconds) {
     if (idToken != null) {
-      COOKIES.write(config.idTokenCookieName(), idToken)
+      COOKIES.write(idTokenName, idToken)
              .httpOnly(false)
              .maxAge(Duration.ofSeconds(expirySeconds))
              .sameSite(Cookie.SameSite.Lax)
@@ -46,15 +59,15 @@ public class Tools {
     }
 
     if (accessToken != null) {
-      COOKIES.write(config.accessTokenCookieName(), accessToken)
+      COOKIES.write(accessTokenName, accessToken)
              .maxAge(Duration.ofSeconds(expirySeconds))
              .sameSite(Cookie.SameSite.Lax)
              .to(req, res);
     }
 
     if (refreshToken != null) {
-      COOKIES.write(config.refreshTokenCookieName(), refreshToken)
-             .maxAge(config.refreshTokenMaxAge())
+      COOKIES.write(refreshTokenName, refreshToken)
+             .maxAge(refreshTokenMaxAge)
              .to(req, res);
     }
   }
@@ -64,32 +77,6 @@ public class Tools {
    */
   public static void addTransientCookie(HTTPRequest req, HTTPResponse res, String name, String value) {
     COOKIES.write(name, value).to(req, res);
-  }
-
-  /**
-   * Clears all authentication cookies from the response.
-   *
-   * @param req    The request.
-   * @param res    The response.
-   * @param config The OIDC configuration used to pull the cookie names from.
-   */
-  public static void clearAllAuthCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config) {
-    clearCookie(req, res, config.accessTokenCookieName());
-    clearCookie(req, res, config.idTokenCookieName());
-    clearCookie(req, res, config.refreshTokenCookieName());
-  }
-
-  /**
-   * Clears all the cookies used by the OIDC middleware.
-   *
-   * @param req    The request.
-   * @param res    The response.
-   * @param config The OIDC configuration used to pull the cookie names from.
-   */
-  public static void clearAllCookies(HTTPRequest req, HTTPResponse res, OIDCConfig config) {
-    clearAllAuthCookies(req, res, config);
-    clearCookie(req, res, config.stateCookieName());
-    clearCookie(req, res, config.returnToCookieName());
   }
 
   /**
@@ -167,8 +154,8 @@ public class Tools {
 
   /**
    * Exchanges a refresh token for a fresh token set at the configured token endpoint, parsing the response. This is the
-   * transport-agnostic core shared by the cookie flow ({@code Authenticated}) and the API flow
-   * ({@code APIAuthenticated}); writing the new tokens back (cookies vs. headers) is left to the caller.
+   * transport-agnostic core shared by every profile's {@code Authentication} orchestrator; writing the new tokens back
+   * is delegated to the profile's {@link TokenWriter}.
    *
    * @param config       The OIDC configuration.
    * @param refreshToken The refresh token to exchange.
