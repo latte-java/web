@@ -14,7 +14,8 @@ import module java.base;
  *   <li>The environment variable whose name is the setting name uppercased with every non-alphanumeric character
  *       replaced by an underscore (so {@code my-app.some-setting} becomes {@code MY_APP_SOME_SETTING}).</li>
  *   <li>The Java system property with the same name as the setting.</li>
- *   <li>Each properties file passed to the constructor, consulted in the order they were supplied.</li>
+ *   <li>Each properties file passed to the constructor that exists on disk, consulted in the order they were
+ *       supplied. Paths that do not exist are silently ignored.</li>
  * </ol>
  * <p>
  * If a setting is not defined in any source, the no-default getters return {@code null} and the default-value
@@ -38,7 +39,8 @@ public class Configuration {
    * system properties. Files are consulted in the order they are supplied; the first file to define a setting wins.
    *
    * @param propertiesFiles The paths to properties files readable by {@link Properties#load(java.io.InputStream)}.
-   * @throws UncheckedIOException if any file cannot be read.
+   *                        Paths that do not exist are ignored.
+   * @throws UncheckedIOException if a file exists but cannot be read.
    */
   public Configuration(Path... propertiesFiles) {
     this(List.of(), propertiesFiles);
@@ -62,11 +64,15 @@ public class Configuration {
    *
    * @param requiredSettings The names of settings that must be defined in at least one source.
    * @param propertiesFiles  The paths to properties files readable by {@link Properties#load(java.io.InputStream)}.
-   * @throws UncheckedIOException  if any file cannot be read.
+   *                         Paths that do not exist are ignored.
+   * @throws UncheckedIOException  if a file exists but cannot be read.
    * @throws IllegalStateException if any required setting is not defined.
    */
   public Configuration(List<String> requiredSettings, Path... propertiesFiles) {
     for (Path propertiesFile : propertiesFiles) {
+      if (Files.notExists(propertiesFile)) {
+        continue;
+      }
       var props = new Properties();
       try (var in = Files.newInputStream(propertiesFile)) {
         props.load(in);

@@ -55,6 +55,28 @@ public class ConfigurationTest {
   }
 
   @Test
+  public void constructorIgnoresNonExistentFile() {
+    Path missing = Path.of("does-not-exist-" + ConfigurationTest.class.getName() + ".properties");
+    assertFalse(Files.exists(missing), "Test assumes the file does not exist");
+    var config = new Configuration(missing);
+    assertNull(config.get("config-test.missing.from-absent-file"));
+  }
+
+  @Test
+  public void constructorReadsExistingFileAroundNonExistentFile() throws Exception {
+    Path missing = Path.of("does-not-exist-around-" + ConfigurationTest.class.getName() + ".properties");
+    Path present = Files.createTempFile("config-test-present", ".properties");
+    assertFalse(Files.exists(missing), "Test assumes the file does not exist");
+    try {
+      Files.writeString(present, "config-test.present.value=here\n");
+      var config = new Configuration(missing, present);
+      assertEquals(config.get("config-test.present.value"), "here");
+    } finally {
+      Files.deleteIfExists(present);
+    }
+  }
+
+  @Test
   public void getBigDecimalParsesValue() {
     String key = "config-test.big-decimal";
     System.setProperty(key, "3.14159265358979323846");
