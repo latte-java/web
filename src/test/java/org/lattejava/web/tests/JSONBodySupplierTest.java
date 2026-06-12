@@ -2,7 +2,7 @@
  * Copyright (c) 2025-2026 The Latte Project
  * SPDX-License-Identifier: MIT
  */
-package org.lattejava.web.tests.json;
+package org.lattejava.web.tests;
 
 import module java.base;
 import module java.net.http;
@@ -10,8 +10,7 @@ import module org.lattejava.json;
 import module org.lattejava.web;
 import module org.testng;
 
-import org.lattejava.web.tests.*;
-import org.lattejava.web.tests.json.internal.UserJSON;
+import org.lattejava.web.tests.internal.UserJSON;
 
 import static org.testng.Assert.*;
 
@@ -22,7 +21,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
       web.post("/users", (_, res, user) -> {
         res.setStatus(200);
         res.setHeader("X-Body-Null", String.valueOf(user == null));
-      }, JSONBodySupplier.of(UserJSON::fromJSON));
+      }, BodySupplier.of(UserJSON::fromJSON));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("");
@@ -36,7 +35,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
     // The json library is lenient by default (@JSON(strict = false)): unknown keys are ignored,
     // so the extra field does not cause a parse error.
     try (var web = new Web()) {
-      web.post("/users", (_, res, _) -> res.setStatus(200), JSONBodySupplier.of(UserJSON::fromJSON));
+      web.post("/users", (_, res, _) -> res.setStatus(200), BodySupplier.of(UserJSON::fromJSON));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("""
@@ -54,7 +53,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
         // Handler should not be invoked
         res.setStatus(200);
         res.setHeader("X-Handler-Ran", "yes");
-      }, JSONBodySupplier.of(UserJSON::fromJSON));
+      }, BodySupplier.of(UserJSON::fromJSON));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("{not valid json");
@@ -70,7 +69,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
         res.setStatus(200);
         res.setHeader("X-Name", user.name);
         res.setHeader("X-Age", String.valueOf(user.age));
-      }, JSONBodySupplier.of(UserJSON::fromJSON));
+      }, BodySupplier.of(UserJSON::fromJSON));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("""
@@ -86,7 +85,7 @@ public class JSONBodySupplierTest extends BaseWebTest {
   public void jsonBodySupplier_typeMismatch_returns400() throws Exception {
     // JSON is valid but doesn't match User's shape (array instead of object)
     try (var web = new Web()) {
-      web.post("/users", (_, res, _) -> res.setStatus(200), JSONBodySupplier.of(UserJSON::fromJSON));
+      web.post("/users", (_, res, _) -> res.setStatus(200), BodySupplier.of(UserJSON::fromJSON));
       web.start(PORT);
 
       HttpResponse<String> response = postJSON("[1, 2, 3]");

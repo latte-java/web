@@ -12,7 +12,6 @@ module org.lattejava.web {
   requires static org.lattejava.json;
 
   exports org.lattejava.web;
-  exports org.lattejava.web.json;
   exports org.lattejava.web.jte;
   exports org.lattejava.web.log;
   exports org.lattejava.web.middleware;

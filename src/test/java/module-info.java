@@ -12,11 +12,9 @@ module org.lattejava.web.tests {
   requires static org.lattejava.json;
 
   exports org.lattejava.web.tests;
-  exports org.lattejava.web.tests.json;
   exports org.lattejava.web.tests.jte;
 
   opens org.lattejava.web.tests to org.lattejava.web, org.testng;
-  opens org.lattejava.web.tests.json to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.jte to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.log to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.middleware to org.lattejava.web, org.testng;
