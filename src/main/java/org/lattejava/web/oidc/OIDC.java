@@ -8,6 +8,8 @@ import module java.base;
 import module org.lattejava.jwt;
 import module org.lattejava.web;
 
+import org.lattejava.web.oidc.internal.*;
+
 /**
  * The OpenID Connect entry point for Latte Web.
  * <p>

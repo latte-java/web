@@ -14,15 +14,17 @@ import org.lattejava.web.tests.*;
 import static org.testng.Assert.*;
 
 /**
- * Verifies that {@link HeaderTokenReader} reads the access token from {@code Authorization: Bearer} and the refresh
- * from {@code X-Refresh-Token}, and that {@link HeaderTokenWriter} writes response headers and does nothing on clear.
+ * Verifies the default API header transport (the {@link TokenReader} / {@link TokenWriter} pair that
+ * {@link APISettings} resolves to): the reader pulls the access token from {@code Authorization: Bearer} and the
+ * refresh token from {@code X-Refresh-Token}, and the writer writes the {@code X-Access-Token} /
+ * {@code X-Refresh-Token} response headers and does nothing on clear.
  *
  * @author Brian Pontarelli
  */
 public class HeaderTransportTest extends BaseWebTest {
   @Test
   public void clearIsNoOp() throws Exception {
-    var writer = new HeaderTokenWriter("X-Access-Token", "X-Refresh-Token");
+    var writer = APISettings.builder().build().tokenWriter();
 
     try (var web = new Web()) {
       web.get("/clear", (req, res) -> {
@@ -40,7 +42,7 @@ public class HeaderTransportTest extends BaseWebTest {
 
   @Test
   public void readsAccessTokenFromBearerHeader() throws Exception {
-    var reader = new HeaderTokenReader("Authorization", "X-Refresh-Token");
+    var reader = APISettings.builder().build().tokenReader();
 
     try (var web = new Web()) {
       web.get("/read", (req, res) -> {
@@ -67,7 +69,7 @@ public class HeaderTransportTest extends BaseWebTest {
 
   @Test
   public void writesSetsResponseHeaders() throws Exception {
-    var writer = new HeaderTokenWriter("X-Access-Token", "X-Refresh-Token");
+    var writer = APISettings.builder().build().tokenWriter();
 
     try (var web = new Web()) {
       web.get("/write", (req, res) -> {

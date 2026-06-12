@@ -18,9 +18,9 @@ import org.lattejava.web.oidc.internal.Tools;
  * <p>
  * Public-client mode ({@code publicClient=true}) is for clients that have no securely held {@code client_secret} —
  * native, desktop, CLI, console, and single-page apps. In this mode {@code clientSecret} may be omitted; the token
- * endpoint is authenticated by including {@code client_id} in the request form body (RFC 6749 §3.2.1) and PKCE
- * provides the proof-of-possession. RFC 7662 introspection is not supported for public clients because nearly all
- * IdPs require client authentication on the introspect endpoint; configuring {@code publicClient=true} with
+ * endpoint is authenticated by including {@code client_id} in the request form body (RFC 6749 §3.2.1) and PKCE provides
+ * the proof-of-possession. RFC 7662 introspection is not supported for public clients because nearly all IdPs require
+ * client authentication on the introspect endpoint; configuring {@code publicClient=true} with
  * {@code validateAccessToken=false} is rejected at build time.
  *
  * @author Brian Pontarelli

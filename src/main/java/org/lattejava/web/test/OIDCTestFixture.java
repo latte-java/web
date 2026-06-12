@@ -4,14 +4,14 @@
  */
 package org.lattejava.web.test;
 
-import module com.fasterxml.jackson.databind;
 import module java.base;
 import module java.net.http;
 import module org.lattejava.http;
+import module org.lattejava.json;
 import module org.lattejava.web;
 
 import org.lattejava.web.oidc.BrowserSettings;
-import org.lattejava.web.oidc.internal.Tools;
+import org.lattejava.web.oidc.internal.*;
 
 /**
  * Test fixture for driving Open ID Connect login and logout against a real provider so that tests can run against a
@@ -26,9 +26,9 @@ import org.lattejava.web.oidc.internal.Tools;
  * One fixture represents one OAuth client: {@link OIDCConfig#clientId()} identifies the client on every request, and
  * the token-exchange shape is dictated by {@link OIDCConfig#publicClient()} — confidential clients
  * ({@code publicClient=false}, the default) authenticate via HTTP Basic with {@link OIDCConfig#clientSecret()}; public
- * clients ({@code publicClient=true} — CLI, native, desktop, console, SPA) send {@code client_id} in the form body
- * and rely on PKCE. PKCE is used in both modes. Tests that need to drive logins for multiple clients should construct
- * one {@code OIDCConfig} + {@code OIDCTestFixture} per client.
+ * clients ({@code publicClient=true} — CLI, native, desktop, console, SPA) send {@code client_id} in the form body and
+ * rely on PKCE. PKCE is used in both modes. Tests that need to drive logins for multiple clients should construct one
+ * {@code OIDCConfig} + {@code OIDCTestFixture} per client.
  * <p>
  * The redirect URI is supplied per {@link #login} call. The two-arg overload defaults to
  * {@code http://localhost:<webTest.port><browser.callbackPath()>} for the SSR web-app case; the three-arg overload
@@ -43,7 +43,6 @@ import org.lattejava.web.oidc.internal.Tools;
 public class OIDCTestFixture {
   private static final String ACCESS_COOKIE_NAME = "access_token";
   private static final String ID_COOKIE_NAME = "id_token";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String REFRESH_COOKIE_NAME = "refresh_token";
   private final BrowserSettings browser;
   private final OIDCConfig config;
@@ -62,9 +61,9 @@ public class OIDCTestFixture {
   /**
    * Creates a new fixture bound to the given test client, OIDC configuration, and browser settings.
    *
-   * @param webTest  The test client whose cookie jar will hold auth cookies after a successful {@link #login}.
-   * @param config   The OIDC configuration for the client under test.
-   * @param browser  The browser settings that determine cookie names and paths.
+   * @param webTest The test client whose cookie jar will hold auth cookies after a successful {@link #login}.
+   * @param config  The OIDC configuration for the client under test.
+   * @param browser The browser settings that determine cookie names and paths.
    */
   public OIDCTestFixture(WebTest webTest, OIDCConfig config, BrowserSettings browser) {
     this.webTest = webTest;
@@ -136,10 +135,10 @@ public class OIDCTestFixture {
 
   /**
    * Walks the OAuth2 authorization-code flow against the configured IdP for the given user with an explicit redirect
-   * URI, exchanges the resulting code for tokens, stores those tokens as cookies in the {@link WebTest} cookie jar,
-   * and returns them. After this call returns, subsequent requests through the test client are authenticated as the
-   * user; callers that need the raw tokens (e.g. for explicit {@code Cookie} headers or {@code Authorization: Bearer}
-   * usage from a CLI/native simulation) can use the returned {@link Tokens}.
+   * URI, exchanges the resulting code for tokens, stores those tokens as cookies in the {@link WebTest} cookie jar, and
+   * returns them. After this call returns, subsequent requests through the test client are authenticated as the user;
+   * callers that need the raw tokens (e.g. for explicit {@code Cookie} headers or {@code Authorization: Bearer} usage
+   * from a CLI/native simulation) can use the returned {@link Tokens}.
    *
    * @param email       The user's email address.
    * @param password    The user's password.
@@ -163,31 +162,22 @@ public class OIDCTestFixture {
       throw new IllegalStateException("OIDC token exchange failed [" + res.statusCode() + "]: [" + res.body() + "]");
     }
 
-    JsonNode json = MAPPER.readTree(res.body());
-    JsonNode access = json.get("access_token");
-    if (access == null || access.isNull()) {
+    var tokens = TokensJSON.fromJSON(res.body());
+    if (tokens.accessToken() == null) {
       throw new IllegalStateException("OIDC token response missing [access_token]: [" + res.body() + "]");
     }
 
-    String accessToken = access.asText();
-    webTest.cookies.add(new Cookie(ACCESS_COOKIE_NAME, accessToken));
+    webTest.cookies.add(new Cookie(ACCESS_COOKIE_NAME, tokens.accessToken()));
 
-    JsonNode id = json.get("id_token");
-    String idToken = id != null && !id.isNull() ? id.asText() : null;
-    if (idToken != null) {
-      webTest.cookies.add(new Cookie(ID_COOKIE_NAME, idToken));
+    if (tokens.idToken() != null) {
+      webTest.cookies.add(new Cookie(ID_COOKIE_NAME, tokens.idToken()));
     }
 
-    JsonNode refresh = json.get("refresh_token");
-    String refreshToken = refresh != null && !refresh.isNull() ? refresh.asText() : null;
-    if (refreshToken != null) {
-      webTest.cookies.add(new Cookie(REFRESH_COOKIE_NAME, refreshToken));
+    if (tokens.refreshToken() != null) {
+      webTest.cookies.add(new Cookie(REFRESH_COOKIE_NAME, tokens.refreshToken()));
     }
 
-    JsonNode expires = json.get("expires_in");
-    Long expiresIn = expires != null && !expires.isNull() ? expires.asLong() : null;
-
-    return new Tokens(accessToken, refreshToken, idToken, expiresIn);
+    return tokens;
   }
 
   /**
@@ -202,8 +192,8 @@ public class OIDCTestFixture {
 
   /**
    * Drives the IdP's hosted-login OAuth2 authorize flow as a browser would, then returns the resulting authorization
-   * code along with the {@code state} value (also the PKCE code-verifier under Latte's single-value scheme). Exposed
-   * to subclasses for fixtures that need direct access to the issued code without performing the token exchange.
+   * code along with the {@code state} value (also the PKCE code-verifier under Latte's single-value scheme). Exposed to
+   * subclasses for fixtures that need direct access to the issued code without performing the token exchange.
    *
    * @param email       The user's email.
    * @param password    The user's password.

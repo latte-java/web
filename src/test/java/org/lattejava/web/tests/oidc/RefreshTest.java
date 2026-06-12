@@ -109,7 +109,7 @@ public class RefreshTest extends BaseOIDCTest {
 
       // With no refresh token cookie the first hop is now the SameSite cross-site interstitial (covered by
       // CrossSiteRefreshTest); the guard param represents the same-site follow-up where no refresh is possible.
-      HttpResponse<String> res = get("/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
+      HttpResponse<String> res = get("/protected/page?csroidcredirect=1", "access_token=tampered");
       assertLoginRedirect(res);
     }
   }

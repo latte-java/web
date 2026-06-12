@@ -4,7 +4,6 @@
  */
 package org.lattejava.web.oidc.internal;
 
-import module com.fasterxml.jackson.databind;
 import module java.base;
 import module java.net.http;
 import module org.lattejava.http;
@@ -23,8 +22,6 @@ public class Tools {
                                                   .followRedirects(HttpClient.Redirect.ALWAYS)
                                                   .connectTimeout(Duration.ofSeconds(5))
                                                   .build();
-
-  public static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final Cookies COOKIES = Cookies.newInstance();
 
@@ -115,14 +112,14 @@ public class Tools {
    * JWT from an IdP response (RFC 7662 introspection or userinfo) when the access token is opaque and cannot be decoded
    * locally.
    *
-   * @param json The JSON claims object.
+   * @param introspect The JSON introspect object.
    * @return The JWT.
    */
-  public static JWT jsonToJWT(JsonNode json) {
+  public static JWT jsonToJWT(TokenValidator.Introspect introspect) {
     JWT.Builder builder = JWT.builder();
-    Iterable<Map.Entry<String, JsonNode>> it = json.properties();
+    Iterable<Map.Entry<String, Object>> it = introspect.claims().entrySet();
     for (var e : it) {
-      builder.claim(e.getKey(), unwrap(e.getValue()));
+      builder.claim(e.getKey(), e.getValue());
     }
     return builder.build();
   }
@@ -182,22 +179,18 @@ public class Tools {
       return null;
     }
 
-    JsonNode body;
+    Tokens tokens;
     try {
-      body = MAPPER.readTree(tokenResponse.body());
+      tokens = TokensJSON.fromJSON(tokenResponse.body());
     } catch (Exception e) {
       return null;
     }
 
-    String accessToken = textOrNull(body, "access_token");
-    if (accessToken == null) {
+    if (tokens.accessToken() == null) {
       return null;
     }
 
-    String refreshTokenOut = textOrNull(body, "refresh_token");
-    String idToken = textOrNull(body, "id_token");
-    Long expiresIn = body.has("expires_in") ? body.get("expires_in").asLong() : null;
-    return new Tokens(accessToken, refreshTokenOut, idToken, expiresIn);
+    return tokens;
   }
 
   /**
@@ -224,28 +217,6 @@ public class Tools {
   }
 
   /**
-   * Strips trailing slashes from a string.
-   *
-   * @param s The string.
-   * @return The string with trailing slashes removed.
-   */
-  public static String stripTrailingSlash(String s) {
-    return s.endsWith("/") ? s.substring(0, s.length() - 1) : s;
-  }
-
-  /**
-   * Converts a property in a JsonNode to text if possible. If it isn't possible, null is returned.
-   *
-   * @param node     The JsonNode.
-   * @param property The property in the node to convert.
-   * @return The text or null.
-   */
-  public static String textOrNull(JsonNode node, String property) {
-    JsonNode v = node != null ? node.get(property) : null;
-    return (v != null && !v.isNull()) ? v.asText() : null;
-  }
-
-  /**
    * Writes out a simple HTML page that performs a meta refresh to the given URL.
    *
    * @param res The response to write the HTML to.
@@ -265,50 +236,6 @@ public class Tools {
         </head>
         </html>
         """.formatted(url));
-  }
-
-  private static Object unwrap(JsonNode node) {
-    if (node == null || node.isNull()) {
-      return null;
-    }
-
-    if (node.isTextual()) {
-      return node.asText();
-    }
-
-    if (node.isBoolean()) {
-      return node.asBoolean();
-    }
-
-    if (node.isInt()) {
-      return node.asInt();
-    }
-
-    if (node.isLong()) {
-      return node.asLong();
-    }
-
-    if (node.isDouble() || node.isFloat()) {
-      return node.asDouble();
-    }
-
-    if (node.isArray()) {
-      List<Object> out = new ArrayList<>();
-      for (JsonNode child : node) {
-        out.add(unwrap(child));
-      }
-      return out;
-    }
-
-    if (node.isObject()) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      for (var e : node.properties()) {
-        out.put(e.getKey(), unwrap(e.getValue()));
-      }
-      return out;
-    }
-
-    return node.asText();
   }
 
   /**

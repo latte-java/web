@@ -6,6 +6,8 @@ package org.lattejava.web.oidc;
 
 import module org.lattejava.web;
 
+import org.lattejava.web.oidc.internal.*;
+
 /**
  * Per-API-profile settings: token transport defaults for header-based clients. All fields have sensible defaults;
  * override via {@link #builder()}.

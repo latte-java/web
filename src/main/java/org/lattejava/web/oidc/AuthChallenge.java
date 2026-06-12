@@ -26,11 +26,11 @@ public interface AuthChallenge {
   /**
    * Responds to an authentication failure (no valid token is present or the token cannot be refreshed).
    *
-   * @param req      The current request.
-   * @param res      The response.
-   * @param writer   The token writer, so the challenge can clear credentials when appropriate.
+   * @param req       The current request.
+   * @param res       The response.
+   * @param writer    The token writer, so the challenge can clear credentials when appropriate.
    * @param retryable {@code true} when the failure may be transient (e.g., an expired JWT on a cross-site navigation
-   *                 that hasn't yet received a refreshed cookie); triggers the SSR meta-refresh interstitial.
+   *                  that hasn't yet received a refreshed cookie); triggers the SSR meta-refresh interstitial.
    * @throws Exception If the response cannot be written.
    */
   void unauthenticated(HTTPRequest req, HTTPResponse res, TokenWriter writer, boolean retryable) throws Exception;

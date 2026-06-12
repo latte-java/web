@@ -398,7 +398,7 @@ public class JSONBodyAsserterTest {
         { "n": 1 }
         """);
 
-    // Jackson's JsonNode.equals distinguishes integers from floats by default.
+    // JSON types are compared strictly, so an integer never equals a float.
     expectAssertionError(() -> asserter.equalTo("""
         { "n": 1.0 }
         """), "JSON body does not match");
@@ -575,7 +575,7 @@ public class JSONBodyAsserterTest {
 
   @Test
   public void hasValueObject_strictTypedComparison() {
-    // The Object overload uses JsonNode.equals so number-vs-string mismatches are surfaced.
+    // The Object overload compares JSON types strictly so number-vs-string mismatches are surfaced.
     var asserter = asserterFor("""
         { "age": 33 }
         """);

@@ -15,8 +15,8 @@ import static org.testng.Assert.*;
 /**
  * Drives the OIDC authorization-code + PKCE flow against the kickstart-provisioned public client (no
  * {@code clientSecret}, RFC 8252 loopback redirect URI). Verifies that the four-arg {@link OIDCTestFixture#login}
- * overload exchanges the code without HTTP Basic auth — sending {@code client_id} in the form body — and returns
- * usable tokens.
+ * overload exchanges the code without HTTP Basic auth — sending {@code client_id} in the form body — and returns usable
+ * tokens.
  *
  * @author Brian Pontarelli
  */

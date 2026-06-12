@@ -17,8 +17,8 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 /**
- * Exercises the per-branch behavior of the {@link Authentication} orchestrator using the MockIdP to avoid requiring
- * FusionAuth for the negative/error paths.
+ * Exercises the per-branch behavior of the authentication middleware across the api, spa, and ssr profiles, using the
+ * MockIdP to avoid requiring FusionAuth for the negative/error paths.
  *
  * @author Brian Pontarelli
  */
@@ -30,11 +30,10 @@ public class AuthenticationTest extends BaseWebTest {
     // A real FA access token, read from a cookie instead of the Authorization header.
     // Demonstrates that swapping the TokenReader in APISettings supersedes the default header transport.
     String accessToken = new FusionAuthFixture().login(USER_EMAIL, DEFAULT_PASSWORD).accessToken();
-    var cookieReader = new CookieTokenReader("access_token", "refresh_token", "id_token");
-    var cookieWriter = new CookieTokenWriter("access_token", "refresh_token", "id_token", Duration.ofDays(30));
+    var cookieTransport = BrowserSettings.builder().build();
     var apiSettings = APISettings.builder()
-                                 .tokenReader(cookieReader)
-                                 .tokenWriter(cookieWriter)
+                                 .tokenReader(cookieTransport.tokenReader())
+                                 .tokenWriter(cookieTransport.tokenWriter())
                                  .build();
     OIDC<String> cookieApi = OIDC.api(
         OIDCConfig.builder()
@@ -75,14 +74,11 @@ public class AuthenticationTest extends BaseWebTest {
                                     .clientId("c")
                                     .clientSecret("s")
                                     .build();
-      var api = APISettings.builder().build();
-      var validator = new TokenValidator(config, null);
-      var challenge = new StatusChallenge();
-      var mw = new Authentication(config, api.tokenReader(), api.tokenWriter(), challenge, validator);
+      OIDC<?> mockApi = OIDC.api(config);
 
       try (var web = new Web()) {
         web.prefix("/api", p -> {
-          p.install(mw);
+          p.install(mockApi.authenticated());
           p.get("/data", (_, res) -> res.setStatus(200));
         });
         web.start(PORT);
@@ -135,14 +131,11 @@ public class AuthenticationTest extends BaseWebTest {
                                     .clientId("c")
                                     .clientSecret("s")
                                     .build();
-      var browser = BrowserSettings.builder().build();
-      var validator = new TokenValidator(config, null);
-      var challenge = new StatusChallenge();
-      var mw = new Authentication(config, browser.tokenReader(), browser.tokenWriter(), challenge, validator);
+      OIDC<?> mockSpa = OIDC.spa(config);
 
       try (var web = new Web()) {
         web.prefix("/app", p -> {
-          p.install(mw);
+          p.install(mockSpa.authenticated());
           p.get("/data", (_, res) -> res.setStatus(200));
         });
         web.start(PORT);
@@ -193,14 +186,11 @@ public class AuthenticationTest extends BaseWebTest {
                                     .clientId("c")
                                     .clientSecret("s")
                                     .build();
-      var browser = BrowserSettings.builder().build();
-      var validator = new TokenValidator(config, null);
-      var challenge = new RedirectChallenge(browser);
-      var mw = new Authentication(config, browser.tokenReader(), browser.tokenWriter(), challenge, validator);
+      OIDC<?> mockSsr = OIDC.ssr(config);
 
       try (var web = new Web()) {
         web.prefix("/secured", p -> {
-          p.install(mw);
+          p.install(mockSsr.authenticated());
           p.get("/page", (_, res) -> res.setStatus(200));
         });
         web.start(PORT);

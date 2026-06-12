@@ -4,16 +4,19 @@
  */
 package org.lattejava.web.oidc.internal;
 
-import module com.fasterxml.jackson.databind;
 import module java.base;
 import module java.net.http;
+import module org.lattejava.json;
 import module org.lattejava.jwt;
 import module org.lattejava.web;
+
+import org.lattejava.web.oidc.internal.internal.*;
 
 /**
  * Validates OIDC access tokens. Performs local JWT verification against the JWKS when
  * {@link org.lattejava.web.oidc.OIDCConfig#validateAccessToken()} is {@code true}, and RFC 7662 introspection for
- * opaque tokens when it is {@code false}. Both paths require the {@code aud} claim to contain the configured client id.
+ * opaque tokens when it is {@code false}. Both paths require the {@code aud} claim to contain the configured client
+ * id.
  *
  * @author Brian Pontarelli
  */
@@ -34,8 +37,8 @@ public class TokenValidator {
    *
    * @param token The token to introspect.
    * @return {@link IntrospectionResult.Active} (carrying the response claims) when the IdP reports {@code active=true};
-   *     {@link IntrospectionResult.Inactive} when it reports inactive or returns a non-5xx error; {@link
-   *     IntrospectionResult.NetworkError} on a 5xx response or a thrown exception.
+   *     {@link IntrospectionResult.Inactive} when it reports inactive or returns a non-5xx error;
+   *     {@link IntrospectionResult.NetworkError} on a 5xx response or a thrown exception.
    */
   public IntrospectionResult introspect(String token) {
     try {
@@ -58,10 +61,9 @@ public class TokenValidator {
         return new IntrospectionResult.Inactive();
       }
 
-      JsonNode json = Tools.MAPPER.readTree(res.body());
-      JsonNode active = json.get("active");
-      if (active != null && active.asBoolean(false)) {
-        return new IntrospectionResult.Active(Tools.jsonToJWT(json));
+      var introspect = IntrospectJSON.fromJSON(res.body());
+      if (introspect.active()) {
+        return new IntrospectionResult.Active(Tools.jsonToJWT(introspect));
       }
 
       return new IntrospectionResult.Inactive();
@@ -144,5 +146,9 @@ public class TokenValidator {
 
     record Valid(JWT jwt) implements Result {
     }
+  }
+
+  @JSON
+  public record Introspect(boolean active, @JSONCatchAll Map<String, Object> claims) {
   }
 }

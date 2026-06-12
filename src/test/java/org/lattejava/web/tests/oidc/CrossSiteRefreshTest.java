@@ -13,13 +13,19 @@ import module org.testng;
 import static org.testng.Assert.*;
 
 /**
- * Exercises the SameSite-Strict / cross-site-request recovery path in {@link Authentication}: when the access token is
+ * Exercises the SameSite-Strict / cross-site-request recovery path of the authentication middleware: when the access token is
  * invalid and no refresh token cookie is visible (the browser withheld the SameSite=Strict refresh token on a
  * cross-site entry navigation), the middleware serves a same-site meta-refresh interstitial so the refresh token is
  * sent on the follow-up request. The {@code csroidcredirect} guard parameter must ensure this happens at most once so a
  * missing/expired refresh token can never produce an infinite redirect loop.
  */
 public class CrossSiteRefreshTest extends BaseOIDCTest {
+  /**
+   * The guard parameter the redirect challenge appends to interstitial follow-up URLs. Pinned here because it is part
+   * of the observable wire format.
+   */
+  private static final String CSR_REDIRECT_PARAM = "csroidcredirect";
+
   private Web web;
 
   @AfterMethod
@@ -63,7 +69,7 @@ public class CrossSiteRefreshTest extends BaseOIDCTest {
   public void guardParamPresent_noRefreshToken_doesNotLoop_fallsThroughToLogin() throws Exception {
     startProtectedServer();
 
-    HttpResponse<String> res = get("/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
+    HttpResponse<String> res = get("/protected/page?" + CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
 
     // No second interstitial — the loop is broken.
     assertNotEquals(res.statusCode(), 200, "Guard param must prevent a second meta-refresh interstitial");
@@ -91,7 +97,7 @@ public class CrossSiteRefreshTest extends BaseOIDCTest {
         "Expected an HTML interstitial, got Content-Type [" + res.headers().firstValue("Content-Type").orElse("") + "]");
     assertTrue(res.headers().firstValue("Location").isEmpty(), "Interstitial must not be an HTTP redirect");
     assertTrue(res.body().contains("http-equiv=\"refresh\""), "Expected a meta-refresh body, got: " + res.body());
-    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1"),
+    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?" + CSR_REDIRECT_PARAM + "=1"),
         "Meta-refresh must target the original URL with the guard parameter, got: " + res.body());
   }
 
@@ -102,7 +108,7 @@ public class CrossSiteRefreshTest extends BaseOIDCTest {
     HttpResponse<String> res = get("/protected/page?foo=bar", "access_token=tampered");
 
     assertEquals(res.statusCode(), 200);
-    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?foo=bar&" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1"),
+    assertTrue(res.body().contains("url=" + BASE_URL + "/protected/page?foo=bar&" + CSR_REDIRECT_PARAM + "=1"),
         "Guard param must be appended with [&] when a query string is already present, got: " + res.body());
   }
 

@@ -11,22 +11,22 @@ import module org.lattejava.web;
 import module org.testng;
 
 import org.lattejava.web.oidc.Tokens;
-import org.lattejava.web.oidc.internal.CookieTokenReader;
-import org.lattejava.web.oidc.internal.CookieTokenWriter;
 import org.lattejava.web.tests.*;
 
 import static org.testng.Assert.*;
 
 /**
- * Verifies that {@link CookieTokenReader} correctly reads three tokens from cookies and that {@link CookieTokenWriter}
- * writes three cookies with the right names and clears them with Max-Age=0.
+ * Verifies the default browser cookie transport (the {@link TokenReader} / {@link TokenWriter} pair that
+ * {@link BrowserSettings} resolves to): the reader pulls three tokens from the {@code access_token},
+ * {@code refresh_token}, and {@code id_token} cookies, and the writer sets those three cookies and clears them with
+ * Max-Age=0.
  *
  * @author Brian Pontarelli
  */
 public class CookieTransportTest extends BaseWebTest {
   @Test
   public void clearDeletesThreeCookies() throws Exception {
-    var writer = new CookieTokenWriter("access_token", "refresh_token", "id_token", Duration.ofDays(30));
+    var writer = BrowserSettings.builder().build().tokenWriter();
 
     try (var web = new Web()) {
       web.get("/clear", (req, res) -> {
@@ -48,7 +48,7 @@ public class CookieTransportTest extends BaseWebTest {
 
   @Test
   public void writesSetsThreeCookies() throws Exception {
-    var writer = new CookieTokenWriter("access_token", "refresh_token", "id_token", Duration.ofSeconds(900));
+    var writer = BrowserSettings.builder().build().tokenWriter();
 
     try (var web = new Web()) {
       web.get("/write", (req, res) -> {
@@ -70,7 +70,7 @@ public class CookieTransportTest extends BaseWebTest {
 
   @Test
   public void readsThreeTokensFromCookies() throws Exception {
-    var reader = new CookieTokenReader("access_token", "refresh_token", "id_token");
+    var reader = BrowserSettings.builder().build().tokenReader();
 
     try (var web = new Web()) {
       web.get("/read", (req, res) -> {

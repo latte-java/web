@@ -143,12 +143,12 @@ public class OIDCConfigTest {
   @Test
   public void validateAccessTokenFalseRequiresIntrospection() {
     assertThrows(IllegalStateException.class, () -> OIDCConfig.builder()
-        .authorizeEndpoint(URI.create("https://idp/auth"))
-        .tokenEndpoint(URI.create("https://idp/token"))
-        .userinfoEndpoint(URI.create("https://idp/userinfo"))
-        .jwksEndpoint(URI.create("https://idp/jwks"))
-        .clientId("c").clientSecret("s")
-        .validateAccessToken(false)
-        .build());
+                                                              .authorizeEndpoint(URI.create("https://idp/auth"))
+                                                              .tokenEndpoint(URI.create("https://idp/token"))
+                                                              .userinfoEndpoint(URI.create("https://idp/userinfo"))
+                                                              .jwksEndpoint(URI.create("https://idp/jwks"))
+                                                              .clientId("c").clientSecret("s")
+                                                              .validateAccessToken(false)
+                                                              .build());
   }
 }

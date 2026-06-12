@@ -4,7 +4,6 @@
  */
 package org.lattejava.web.oidc.internal;
 
-import module com.fasterxml.jackson.databind;
 import module java.base;
 import module org.lattejava.http;
 import module org.lattejava.jwt;
@@ -63,20 +62,15 @@ public class CallbackHandler implements Handler {
       return;
     }
 
-    JsonNode body = Tools.MAPPER.readTree(tok.body());
-    String accessToken = Tools.textOrNull(body, "access_token");
-    String idToken = Tools.textOrNull(body, "id_token");
-    String refreshToken = Tools.textOrNull(body, "refresh_token");
-    long expiresIn = body.has("expires_in") ? body.get("expires_in").asLong() : 3600L;
-
-    if (accessToken == null || idToken == null) {
+    Tokens tokens = TokensJSON.fromJSON(tok.body());
+    if (tokens.accessToken() == null || tokens.idToken() == null) {
       redirectError(req, res, "token_exchange_failed", "Token exchange failed");
       return;
     }
 
     // Always verify the id_token signature (OIDC spec requires it).
     try {
-      JWT.decode(idToken, jwks);
+      JWT.decode(tokens.idToken(), jwks);
     } catch (Exception e) {
       redirectError(req, res, "invalid_id_token", "Invalid ID token");
       return;
@@ -85,7 +79,7 @@ public class CallbackHandler implements Handler {
     // When validateAccessToken=true, verify the access-token JWT too.
     if (config.validateAccessToken()) {
       try {
-        JWT.decode(accessToken, jwks);
+        JWT.decode(tokens.accessToken(), jwks);
       } catch (Exception e) {
         redirectError(req, res, "invalid_access_token", "Invalid access token");
         return;
@@ -93,7 +87,7 @@ public class CallbackHandler implements Handler {
     }
 
     String returnTo = Tools.readCookie(req, browser.returnToCookieName());
-    browser.tokenWriter().write(req, res, new Tokens(accessToken, refreshToken, idToken, expiresIn));
+    browser.tokenWriter().write(req, res, tokens);
     Tools.clearCookie(req, res, browser.stateCookieName());
     Tools.clearCookie(req, res, browser.returnToCookieName());
 

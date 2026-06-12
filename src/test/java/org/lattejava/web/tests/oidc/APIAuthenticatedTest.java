@@ -42,7 +42,7 @@ public class APIAuthenticatedTest extends BaseOIDCTest {
     // Use a custom APISettings with a custom token reader that reads from X-My-Access header. The settings object
     // itself does not model header names — the reader does.
     var apiSettings = APISettings.builder()
-                                 .tokenReader(new HeaderTokenReader("X-My-Access", "X-Refresh-Token"))
+                                 .tokenReader(req -> new Tokens(req.getHeader("X-My-Access"), req.getHeader("X-Refresh-Token"), null, null))
                                  .build();
     OIDC<String> customApi = OIDC.api(
         OIDCConfig.builder()

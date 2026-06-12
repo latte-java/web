@@ -14,11 +14,18 @@ import static org.lattejava.web.tests.oidc.FusionAuthFixture.*;
 import static org.testng.Assert.*;
 
 /**
- * Exercises the opaque-access-token path ({@code validateAccessToken=false}), where {@link Authentication} validates
- * the token at the IdP's RFC 7662 introspection endpoint rather than decoding it locally. The introspection response is
- * the claims source and supplies the {@code aud} claim for the audience check against the configured client id.
+ * Exercises the opaque-access-token path ({@code validateAccessToken=false}), where the authentication middleware
+ * validates the token at the IdP's RFC 7662 introspection endpoint rather than decoding it locally. The introspection
+ * response is the claims source and supplies the {@code aud} claim for the audience check against the configured
+ * client id.
  */
 public class OpaqueTokenValidationTest extends BaseOIDCTest {
+  /**
+   * The guard parameter the redirect challenge appends to interstitial follow-up URLs. Pinned here because it is part
+   * of the observable wire format.
+   */
+  private static final String CSR_REDIRECT_PARAM = "csroidcredirect";
+
   private static final int MOCK_PORT = 9099;
 
   private static OIDC<JWT> opaqueOIDC;
@@ -85,7 +92,7 @@ public class OpaqueTokenValidationTest extends BaseOIDCTest {
         web.start(PORT);
 
         // The guard param skips the SameSite interstitial so the absence of a refresh token is treated as final.
-        HttpResponse<String> res = get("/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1", "access_token=any-opaque-token");
+        HttpResponse<String> res = get("/protected/page?" + CSR_REDIRECT_PARAM + "=1", "access_token=any-opaque-token");
         assertEquals(res.statusCode(), 302);
         assertEquals(res.headers().firstValue("Location").orElse(null), "/login");
       }
@@ -104,7 +111,7 @@ public class OpaqueTokenValidationTest extends BaseOIDCTest {
 
       // With no refresh token cookie the first hop is the SameSite cross-site interstitial; the guard param represents
       // the browser's same-site follow-up, where the absence of a refresh token is final.
-      HttpResponse<String> res = get("/protected/page?" + RedirectChallenge.CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
+      HttpResponse<String> res = get("/protected/page?" + CSR_REDIRECT_PARAM + "=1", "access_token=tampered");
       assertEquals(res.statusCode(), 302);
       assertEquals(res.headers().firstValue("Location").orElse(null), "/login");
     }
