@@ -13,7 +13,7 @@ project(group: "org.lattejava", name: "web", version: "0.4.0", licenses: ["MIT"]
 
   dependencies {
     group(name: "compile-processors") {
-      dependency(id: "org.lattejava:json:0.3.0")
+      dependency(id: "org.lattejava:json:0.4.0")
     }
     group(name: "compile") {
       dependency(id: "gg.jte:jte:3.2.1")
@@ -33,6 +33,7 @@ project(group: "org.lattejava", name: "web", version: "0.4.0", licenses: ["MIT"]
 
 // Plugins
 dependency = loadPlugin(id: "org.lattejava.plugin:dependency:0.4.0")
+file = loadPlugin(id: "org.lattejava.plugin:file:0.4.2")
 idea = loadPlugin(id: "org.lattejava.plugin:idea:0.4.1")
 java = loadPlugin(id: "org.lattejava.plugin:java:0.4.4")
 javaTestNG = loadPlugin(id: "org.lattejava.plugin:java-testng:0.4.0")
@@ -47,6 +48,7 @@ target(name: "clean", description: "Cleans the project") {
 }
 
 target(name: "build", description: "Compiles and JARs the project") {
+  file.execute("git config core.hooksPath .githooks")
   java.compile()
   java.jar()
 }
@@ -68,18 +70,10 @@ target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
 }
 
 target(name: "format", description: "Formats the source code using IntelliJ's CLI") {
-  exec(["${SYS["user.home"]}/Applications/IntelliJ IDEA.app/Contents/bin/format.sh", "-r", "-s", ".idea/codeStyles/Project.xml", "src/main/java/"])
-  exec(["${SYS["user.home"]}/Applications/IntelliJ IDEA.app/Contents/bin/format.sh", "-r", "-s", ".idea/codeStyles/Project.xml", "src/test/java/"])
+  file.execute(["${SYS["user.home"]}/Applications/IntelliJ IDEA.app/Contents/bin/format.sh", "-r", "-s", ".idea/codeStyles/Project.xml", "src/main/java/"])
+  file.execute(["${SYS["user.home"]}/Applications/IntelliJ IDEA.app/Contents/bin/format.sh", "-r", "-s", ".idea/codeStyles/Project.xml", "src/test/java/"])
 }
 
 target(name: "print-dependency-tree", description: "Prints the dependency tree") {
   dependency.printFull()
-}
-
-private void exec(cmd, boolean ignoreFailure = false) {
-  def proc = cmd.execute()
-  proc.waitForProcessOutput(System.out, System.err)
-  if (!ignoreFailure && proc.exitValue() != 0) {
-    fail("Command failed [exit=${proc.exitValue()}]: ${cmd}")
-  }
 }
