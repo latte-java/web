@@ -409,23 +409,23 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Starts the HTTP server using the given listener configuration.
+   * Starts the HTTP server using the given listener configurations.
    *
-   * @param listener The listener configuration.
+   * @param listeners The listener configurations.
    * @return This Web instance for chaining.
    */
-  public Web start(HTTPListenerConfiguration listener) {
+  public Web start(HTTPListenerConfiguration... listeners) {
     if (isChild) {
       throw new IllegalStateException("Cannot call start on a prefix child Web instance");
     }
     if (started.get()) {
       throw new IllegalStateException("Web has already been started");
     }
-    Objects.requireNonNull(listener, "listener must not be null");
+    Objects.requireNonNull(listeners, "listeners must not be null");
 
     HTTPServer newServer = new HTTPServer()
         .withHandler(this::handleRequest)
-        .withListener(listener)
+        .withListeners(listeners)
         .withBaseDir(baseDir != null ? baseDir : Paths.get(".")) // Default to current working directory
         .start();
 
@@ -443,7 +443,10 @@ public class Web implements AutoCloseable {
     shutdownHook = hook;
     started.set(true);
 
-    LOG.log(System.Logger.Level.INFO, "Web application is available at [{0}]", buildURL(listener));
+    var urls = Arrays.stream(listeners)
+                     .map(Web::buildURL)
+                     .collect(Collectors.joining(", "));
+    LOG.log(System.Logger.Level.INFO, "Web application is available at [{0}]", urls);
     return this;
   }
 
