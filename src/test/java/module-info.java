@@ -16,7 +16,6 @@ module org.lattejava.web.tests {
 
   opens org.lattejava.web.tests to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.jte to org.lattejava.web, org.testng;
-  opens org.lattejava.web.tests.log to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.middleware to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.oidc to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.test to org.lattejava.web, org.testng;

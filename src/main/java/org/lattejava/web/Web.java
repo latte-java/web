@@ -17,6 +17,7 @@ import org.lattejava.web.internal.*;
  */
 @SuppressWarnings("UnusedReturnValue")
 public class Web implements AutoCloseable {
+  private static final System.Logger LOG = System.getLogger(Web.class.getName());
   private final boolean isChild;
   private final MiddlewareTrie middlewareTrie;
   private final String pathPrefix;
@@ -24,8 +25,6 @@ public class Web implements AutoCloseable {
   private final AtomicBoolean started;
   private final RouteTrie trie;
   private Path baseDir;
-  private Level logLevel;
-  private LoggerFactory loggerFactory;
   private Handler missingHandler;
   private HTTPServer server;
   private Thread shutdownHook;
@@ -196,41 +195,6 @@ public class Web implements AutoCloseable {
     }
 
     middlewareTrie.install(pathPrefix, middlewares);
-    return this;
-  }
-
-  /**
-   * Sets the level applied to the logger this Web instance retrieves from its {@link LoggerFactory}. If the factory
-   * shares a single logger across classes (as the bundled factories do), this also affects the logger used by the
-   * underlying HTTP server.
-   *
-   * @param logLevel The level.
-   * @return This Web instance for chaining.
-   * @throws IllegalStateException if called after {@link #start(int)}.
-   */
-  public Web logLevel(Level logLevel) {
-    if (started.get()) {
-      throw new IllegalStateException("Cannot set logLevel after Web has been started");
-    }
-    Objects.requireNonNull(logLevel, "logLevel must not be null");
-    this.logLevel = logLevel;
-    return this;
-  }
-
-  /**
-   * Sets the {@link LoggerFactory} used by this Web instance and the underlying HTTP server. If not called, the default
-   * is {@link WebPrintStreamLoggerFactory#FACTORY}.
-   *
-   * @param loggerFactory The factory.
-   * @return This Web instance for chaining.
-   * @throws IllegalStateException if called after {@link #start(int)}.
-   */
-  public Web loggerFactory(LoggerFactory loggerFactory) {
-    if (started.get()) {
-      throw new IllegalStateException("Cannot set loggerFactory after Web has been started");
-    }
-    Objects.requireNonNull(loggerFactory, "loggerFactory must not be null");
-    this.loggerFactory = loggerFactory;
     return this;
   }
 
@@ -459,16 +423,9 @@ public class Web implements AutoCloseable {
     }
     Objects.requireNonNull(listener, "listener must not be null");
 
-    LoggerFactory factory = loggerFactory != null ? loggerFactory : WebPrintStreamLoggerFactory.FACTORY;
-    Logger log = factory.getLogger(Web.class);
-    if (logLevel != null) {
-      log.setLevel(logLevel);
-    }
-
     HTTPServer newServer = new HTTPServer()
         .withHandler(this::handleRequest)
         .withListener(listener)
-        .withLoggerFactory(factory)
         .withBaseDir(baseDir != null ? baseDir : Paths.get(".")) // Default to current working directory
         .start();
 
@@ -486,7 +443,7 @@ public class Web implements AutoCloseable {
     shutdownHook = hook;
     started.set(true);
 
-    log.info("Web application is available at [{}]", buildURL(listener));
+    LOG.log(System.Logger.Level.INFO, "Web application is available at [{0}]", buildURL(listener));
     return this;
   }
 
@@ -511,17 +468,6 @@ public class Web implements AutoCloseable {
     // Run the shutdown tasks
     for (Runnable shutdownTask : shutdownTasks) {
       shutdownTask.run();
-    }
-  }
-
-  private void handleRequest(HTTPRequest request, HTTPResponse response) throws Exception {
-    try {
-      dispatch(request, response);
-    } catch (HTTPException e) {
-      // Baseline safety net: render any uncaught HTTPException so framework failures (e.g. a body that fails to parse)
-      // produce their carried status without requiring an ExceptionHandler to be installed. A user-installed
-      // ExceptionHandler runs inside the chain and gets first crack; this only handles what reaches the top.
-      ExceptionHandler.DEFAULT_RENDERER.render(request, response, e);
     }
   }
 
@@ -561,6 +507,17 @@ public class Web implements AutoCloseable {
           new MiddlewareChainImpl(prefixMiddlewares, notFound).next(request, response);
         }
       }
+    }
+  }
+
+  private void handleRequest(HTTPRequest request, HTTPResponse response) throws Exception {
+    try {
+      dispatch(request, response);
+    } catch (HTTPException e) {
+      // Baseline safety net: render any uncaught HTTPException so framework failures (e.g. a body that fails to parse)
+      // produce their carried status without requiring an ExceptionHandler to be installed. A user-installed
+      // ExceptionHandler runs inside the chain and gets first crack; this only handles what reaches the top.
+      ExceptionHandler.DEFAULT_RENDERER.render(request, response, e);
     }
   }
 }

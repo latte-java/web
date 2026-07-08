@@ -679,8 +679,8 @@ Add the setter, alphabetized with the other `Web` instance methods (between `ins
 Add an `import` for the default factory at the top of the file (with the existing `org.lattejava.web.internal.*` import), alphabetized:
 
 ```java
-import org.lattejava.web.internal.*;
-import org.lattejava.web.log.WebPrintStreamLoggerFactory;
+
+
 ```
 
 In `start(int port)`, replace the existing line:
