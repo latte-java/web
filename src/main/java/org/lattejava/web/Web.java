@@ -45,34 +45,6 @@ public class Web implements AutoCloseable {
     this.middlewareTrie = middlewareTrie;
   }
 
-  private static String buildURL(HTTPListenerConfiguration listener) {
-    String scheme = listener.isTLS() ? "https" : "http";
-    InetAddress address = listener.getBindAddress();
-    String host;
-    if (address.isAnyLocalAddress()) {
-      host = "localhost";
-    } else if (address instanceof Inet6Address) {
-      host = "[" + address.getHostAddress() + "]";
-    } else {
-      host = address.getHostAddress();
-    }
-    return scheme + "://" + host + ":" + listener.getPort();
-  }
-
-  private static boolean isValidMethodToken(String method) {
-    int len = method.length();
-    if (len == 0) {
-      return false;
-    }
-    for (int i = 0; i < len; i++) {
-      char c = method.charAt(i);
-      if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   /**
    * Adds a shutdown hook that runs the given task when the JVM shuts down.
    *
@@ -373,7 +345,7 @@ public class Web implements AutoCloseable {
       if (method.isBlank()) {
         throw new IllegalArgumentException("HTTP method must not be blank");
       }
-      if (!isValidMethodToken(method)) {
+      if (!WebTools.isValidMethodToken(method)) {
         throw new IllegalArgumentException("Invalid HTTP method [" + method + "]");
       }
       normalizedMethods.add(method.toUpperCase(Locale.ROOT));
@@ -444,7 +416,7 @@ public class Web implements AutoCloseable {
     started.set(true);
 
     var urls = Arrays.stream(listeners)
-                     .map(Web::buildURL)
+                     .map(WebTools::buildURL)
                      .collect(Collectors.joining(", "));
     LOG.log(System.Logger.Level.INFO, "Web application is available at [{0}]", urls);
     return this;

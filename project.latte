@@ -2,7 +2,7 @@
  * Copyright (c) 2025-2026 The Latte Project
  * SPDX-License-Identifier: MIT
  */
-project(group: "org.lattejava", name: "web", version: "0.5.1", licenses: ["MIT"]) {
+project(group: "org.lattejava", name: "web", version: "0.6.0", licenses: ["MIT"]) {
   workflow {
     standard()
   }
@@ -18,7 +18,7 @@ project(group: "org.lattejava", name: "web", version: "0.5.1", licenses: ["MIT"]
     group(name: "compile") {
       dependency(id: "gg.jte:jte:3.2.1")
       dependency(id: "gg.jte:jte-runtime:3.2.1")
-      dependency(id: "org.lattejava:http:0.2.1")
+      dependency(id: "org.lattejava:http:0.3.0")
       dependency(id: "org.lattejava:jwt:0.2.0")
     }
     group(name: "test-compile", export: false) {
