@@ -95,6 +95,31 @@ public class JSONBodyAsserter extends BodyAsserter {
   }
 
   /**
+   * Asserts that the body, parsed as JSON, is equal to the JSON form of the given Java object. The expected object is
+   * converted to its JSON shape the same way the Latte <code>json</code> library would serialize it: {@link Map}s
+   * become JSON objects, {@link Iterable}s and arrays become JSON arrays, numbers, booleans, strings, and {@code null}
+   * map to their JSON scalar forms, enums use their {@code name()}, and {@link UUID}, {@link URI}, {@link URL}, and
+   * the ISO-8601 {@code java.time} types use their string forms. Records and POJOs with public fields are converted
+   * via reflection; {@code null} components and fields are omitted, mirroring the library's {@code omitNulls} default.
+   * Object-key ordering is always ignored; array ordering follows the {@link #unorderedArrays(boolean)} setting.
+   * <p>
+   * Reflection over a record or POJO in a named module requires its package to be opened (or exported) to
+   * {@code org.lattejava.web}.
+   *
+   * @param expected The expected value.
+   * @return This asserter for chaining.
+   */
+  public <T> JSONBodyAsserter equalTo(Function<byte[], T> converter, T expected) {
+    if (body == null || body.length == 0) {
+      Assertions.fail("JSON body was null");
+    }
+
+    T value = converter.apply(body);
+    Assertions.assertEquals(value, expected, "JSON did not match the expected object");
+    return this;
+  }
+
+  /**
    * Asserts that the JSON tree contains a node at the given JSON Pointer.
    *
    * @param pointer The JSON Pointer (e.g. {@code "/user/name"} or {@code "/items/0/id"}).
@@ -292,6 +317,7 @@ public class JSONBodyAsserter extends BodyAsserter {
     if (json == null) {
       throw new AssertionError("JSON body for [" + label + "] is null");
     }
+
     try {
       Map<String, Object> wrapper = new JSONParser().parse("{\"v\":" + json + "}", new AnyObjectObserver());
       if (wrapper.size() != 1 || !wrapper.containsKey("v")) {

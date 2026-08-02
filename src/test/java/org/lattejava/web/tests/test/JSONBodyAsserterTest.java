@@ -8,6 +8,9 @@ import module java.base;
 import module org.lattejava.web;
 import module org.testng;
 
+import org.lattejava.json.*;
+import org.lattejava.web.tests.test.internal.*;
+
 import static org.testng.Assert.*;
 
 @Test
@@ -34,6 +37,17 @@ public class JSONBodyAsserterTest {
     // Different content still fails (size matches but elements differ).
     expectAssertionError(() -> asserter.equalTo(List.of(1, 2, 4)),
         "JSON body does not match");
+  }
+
+  @Test
+  public void equalToObject_annotated() {
+    var asserter = asserterFor("""
+        {"name": "John", "age": 42}
+        """);
+
+    asserter.equalTo(TestAnnotated::fromJSON, new TestAnnotated("John", 42));
+    expectAssertionError(() -> asserter.equalTo(TestAnnotated::fromJSON, new TestAnnotated("John", 43)),
+        "JSON did not match the expected object");
   }
 
   @Test
@@ -814,5 +828,12 @@ public class JSONBodyAsserterTest {
   }
 
   public record TestUser(String name, int age, TestAddress address) {
+  }
+
+  @JSON
+  public record TestAnnotated(String name, int age) {
+    public static TestAnnotated fromJSON(byte[] bytes) {
+      return TestAnnotatedJSON.fromJSON(bytes);
+    }
   }
 }
