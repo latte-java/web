@@ -9,6 +9,8 @@ import module org.lattejava.web;
 import module org.lattejava.web.tests;
 import module org.testng;
 
+import org.lattejava.web.test.json.*;
+
 @Test
 public class WebTestTest extends BaseWebTest {
   private static Web echoServer() {
