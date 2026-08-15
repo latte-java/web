@@ -9,6 +9,7 @@ import module org.lattejava.web;
 import module org.testng;
 
 import org.lattejava.json.*;
+import org.lattejava.web.test.json.*;
 import org.lattejava.web.tests.test.internal.*;
 
 import static org.testng.Assert.*;

@@ -15,7 +15,7 @@ package org.lattejava.web.test;
  *
  * @author Brian Pontarelli
  */
-final class Assertions {
+public final class Assertions {
   static final String ASSERT_EQUAL_LEFT = "expected [";
   static final String ASSERT_MIDDLE = "] but found [";
   static final String ASSERT_RIGHT = "]";
@@ -32,7 +32,7 @@ final class Assertions {
    * @param expected The expected value.
    * @param message  An optional prefix describing what was being checked (may be {@code null}).
    */
-  static void assertEquals(Object actual, Object expected, String message) {
+  public static void assertEquals(Object actual, Object expected, String message) {
     if (areEqual(actual, expected)) {
       return;
     }
@@ -46,7 +46,7 @@ final class Assertions {
    * @param expected The value the actual is expected to differ from.
    * @param message  An optional prefix describing what was being checked.
    */
-  static void assertNotEquals(Object actual, Object expected, String message) {
+  public static void assertNotEquals(Object actual, Object expected, String message) {
     if (!areEqual(actual, expected)) {
       return;
     }
@@ -59,7 +59,7 @@ final class Assertions {
    * @param condition The condition to check.
    * @param message   An optional prefix describing what was being checked.
    */
-  static void assertTrue(boolean condition, String message) {
+  public static void assertTrue(boolean condition, String message) {
     if (condition) {
       return;
     }
@@ -71,7 +71,7 @@ final class Assertions {
    *
    * @param message The failure message.
    */
-  static void fail(String message) {
+  public static void fail(String message) {
     throw new AssertionError(message);
   }
 
@@ -83,7 +83,7 @@ final class Assertions {
    * @param expected The expected value.
    * @param message  An optional prefix describing what was being checked.
    */
-  static void failNotEqual(Object actual, Object expected, String message) {
+  public static void failNotEqual(Object actual, Object expected, String message) {
     throw new AssertionError(format(actual, expected, message, true));
   }
 
