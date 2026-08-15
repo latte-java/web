@@ -124,8 +124,9 @@ public class JSONBodyAsserter extends BodyAsserter {
    * <ul>
    *   <li><strong>Substitutions</strong> — values the test knows, referenced as {@code "${name}"} and supplied as
    *   name/value varargs pairs ({@code equalToFile(path, "applicationId", id)}). A string node that is exactly one
-   *   token is replaced by the value with its JSON type intact (a number stays a number, a boolean stays a boolean,
-   *   a {@link UUID} becomes its string form). A string node with embedded tokens
+   *   token is replaced by the value with its JSON type intact. For example, {@code "foo": "${number}"} becomes
+   *   {@code "foo": 42} if the replacement is a number. If it's replacement is a String, it remains a String. This
+   *   allows IDEs and editors to validate the JSON file correctly. A string node with embedded tokens
    *   ({@code "http://localhost:${port}/"}) splices in the value's text form and remains a string.</li>
    *   <li><strong>Placeholders</strong> — values the test cannot know, each of which must be the entire string node:
    *   {@code "${anyBoolean}"}, {@code "${anyInstant}"}, {@code "${anyNumber}"}, {@code "${anyString}"},
@@ -133,6 +134,9 @@ public class JSONBodyAsserter extends BodyAsserter {
    *   runs to the closing brace at the very end of the string node). A placeholder asserts type and shape at its
    *   position; it never matches a missing key or a JSON {@code null}.</li>
    * </ul>
+   * <p>
+   * NOTE: {@code anyInstant} is an ISO instant, not a milliseconds since Epoch.
+   * <p>
    * A literal <code>${</code> in expected text is escaped as <code>$${</code>. Any other unescaped <code>${</code>
    * occurrence (an unknown name, a malformed or unterminated token) fails the assertion, as does a supplied
    * substitution that the file never references.
