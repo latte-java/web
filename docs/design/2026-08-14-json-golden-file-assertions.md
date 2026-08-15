@@ -44,6 +44,12 @@ Plain JSON plus two kinds of tokens, each occupying part or all of a JSON **stri
    Placeholders assert type/shape at that position; the key must still be present (key-set comparison is unaffected).
    Placeholders must be the entire string node.
 
+   A colon after the placeholder name starts an argument. `regex` takes its pattern bare. `anyNumber`, `anyString`,
+   and `anyInstant` take an inclusive range: `${anyNumber:[-10:100]}` bounds the value, `${anyString:[0:100]}` bounds
+   the length, and `${anyInstant:[2026-01-01T00:00:00Z/2026-12-31T00:00:00Z]}` bounds the instant using ISO 8601
+   interval notation (slash separator, because instants contain colons). Either bound may be empty (open-ended), but
+   not both, and the minimum must not exceed the maximum.
+
 Rules:
 
 - An unknown `${...}` token fails the assertion (catches typos).

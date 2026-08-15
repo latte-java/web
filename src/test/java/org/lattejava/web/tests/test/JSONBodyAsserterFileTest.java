@@ -59,6 +59,49 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
+  public void equalToFile_anyInstantRange() throws IOException {
+    // ISO 8601 interval notation: slash separator, since instants contain colons.
+    Path file = writeExpected("""
+        { "created": "${anyInstant:[2026-01-01T00:00:00Z/2026-12-31T23:59:59Z]}" }
+        """);
+
+    asserterFor("""
+        { "created": "2026-08-15T12:00:00Z" }
+        """).equalToFile(file);
+
+    // Bounds are inclusive.
+    asserterFor("""
+        { "created": "2026-01-01T00:00:00Z" }
+        """).equalToFile(file);
+    asserterFor("""
+        { "created": "2026-12-31T23:59:59Z" }
+        """).equalToFile(file);
+
+    var before = asserterFor("""
+        { "created": "2025-12-31T23:59:59Z" }
+        """);
+    expectThrows(AssertionError.class, () -> before.equalToFile(file));
+
+    var after = asserterFor("""
+        { "created": "2027-01-01T00:00:00Z" }
+        """);
+    expectThrows(AssertionError.class, () -> after.equalToFile(file));
+
+    // Open-ended start: anything up to the end instant.
+    Path openStart = writeExpected("""
+        { "created": "${anyInstant:[/2026-12-31T23:59:59Z]}" }
+        """);
+    asserterFor("""
+        { "created": "1999-01-01T00:00:00Z" }
+        """).equalToFile(openStart);
+
+    var late = asserterFor("""
+        { "created": "2030-01-01T00:00:00Z" }
+        """);
+    expectThrows(AssertionError.class, () -> late.equalToFile(openStart));
+  }
+
+  @Test
   public void equalToFile_anyNumberPlaceholder() throws IOException {
     Path file = writeExpected("""
         { "count": "${anyNumber}" }
@@ -79,6 +122,57 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
+  public void equalToFile_anyNumberRange() throws IOException {
+    Path file = writeExpected("""
+        { "count": "${anyNumber:[-10:100]}" }
+        """);
+
+    asserterFor("""
+        { "count": 42 }
+        """).equalToFile(file);
+    asserterFor("""
+        { "count": 99.5 }
+        """).equalToFile(file);
+
+    // Bounds are inclusive.
+    asserterFor("""
+        { "count": -10 }
+        """).equalToFile(file);
+    asserterFor("""
+        { "count": 100 }
+        """).equalToFile(file);
+
+    var low = asserterFor("""
+        { "count": -10.5 }
+        """);
+    expectThrows(AssertionError.class, () -> low.equalToFile(file));
+
+    var high = asserterFor("""
+        { "count": 101 }
+        """);
+    expectThrows(AssertionError.class, () -> high.equalToFile(file));
+
+    // A string is not a number, even if its text form is in range.
+    var string = asserterFor("""
+        { "count": "42" }
+        """);
+    expectThrows(AssertionError.class, () -> string.equalToFile(file));
+
+    // Open-ended end: any non-negative number.
+    Path openEnd = writeExpected("""
+        { "count": "${anyNumber:[0:]}" }
+        """);
+    asserterFor("""
+        { "count": 123456 }
+        """).equalToFile(openEnd);
+
+    var negative = asserterFor("""
+        { "count": -1 }
+        """);
+    expectThrows(AssertionError.class, () -> negative.equalToFile(openEnd));
+  }
+
+  @Test
   public void equalToFile_anyStringPlaceholder() throws IOException {
     Path file = writeExpected("""
         { "name": "${anyString}" }
@@ -93,6 +187,53 @@ public class JSONBodyAsserterFileTest {
         { "name": 42 }
         """);
     expectThrows(AssertionError.class, () -> asserter.equalToFile(file));
+  }
+
+  @Test
+  public void equalToFile_anyStringRange() throws IOException {
+    // The range bounds the string's length, inclusive on both ends.
+    Path file = writeExpected("""
+        { "name": "${anyString:[2:5]}" }
+        """);
+
+    asserterFor("""
+        { "name": "abc" }
+        """).equalToFile(file);
+    asserterFor("""
+        { "name": "ab" }
+        """).equalToFile(file);
+    asserterFor("""
+        { "name": "abcde" }
+        """).equalToFile(file);
+
+    var tooShort = asserterFor("""
+        { "name": "a" }
+        """);
+    expectThrows(AssertionError.class, () -> tooShort.equalToFile(file));
+
+    var tooLong = asserterFor("""
+        { "name": "abcdef" }
+        """);
+    expectThrows(AssertionError.class, () -> tooLong.equalToFile(file));
+
+    // A number is not a string, even if its text form's length is in range.
+    var number = asserterFor("""
+        { "name": 123 }
+        """);
+    expectThrows(AssertionError.class, () -> number.equalToFile(file));
+
+    // Open-ended start: any string up to 3 characters, including empty.
+    Path openStart = writeExpected("""
+        { "name": "${anyString:[:3]}" }
+        """);
+    asserterFor("""
+        { "name": "" }
+        """).equalToFile(openStart);
+
+    var overflow = asserterFor("""
+        { "name": "abcd" }
+        """);
+    expectThrows(AssertionError.class, () -> overflow.equalToFile(openStart));
   }
 
   @Test
@@ -252,6 +393,49 @@ public class JSONBodyAsserterFileTest {
         { "name": "Bob" }
         """);
     expectAssertionError(() -> asserter.equalToFile(file), file.toString());
+  }
+
+  @Test
+  public void equalToFile_malformedRanges() throws IOException {
+    // Missing brackets.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "count": "${anyNumber:0:100}" }
+        """)), "Malformed range");
+
+    // Both bounds empty.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "count": "${anyNumber:[:]}" }
+        """)), "at least one bound");
+
+    // Minimum greater than maximum.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "count": "${anyNumber:[100:0]}" }
+        """)), "minimum exceeds the maximum");
+
+    // String length bounds must be non-negative integers.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "name": "${anyString:[-1:5]}" }
+        """)), "Invalid range bound");
+
+    // Instant ranges use ISO 8601 interval notation (slash), not a colon separator.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "created": "${anyInstant:[2026-01-01T00:00:00Z:2026-12-31T00:00:00Z]}" }
+        """)), "Malformed range");
+
+    // Instant bounds must be parseable by Instant.parse.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "created": "${anyInstant:[not-an-instant/2026-12-31T00:00:00Z]}" }
+        """)), "Invalid range bound");
+
+    // anyBoolean and anyUUID take no arguments.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "flag": "${anyBoolean:[0:1]}" }
+        """)), "Malformed token");
+
+    // Parameterized placeholders must be the entire string node.
+    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
+        { "label": "count is ${anyNumber:[0:1]} items" }
+        """)), "must be the entire string node");
   }
 
   @Test

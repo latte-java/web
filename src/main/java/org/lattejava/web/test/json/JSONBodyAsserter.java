@@ -132,7 +132,14 @@ public class JSONBodyAsserter extends BodyAsserter {
    *   {@code "${anyBoolean}"}, {@code "${anyInstant}"}, {@code "${anyNumber}"}, {@code "${anyString}"},
    *   {@code "${anyUUID}"}, and {@code "${regex:PATTERN}"} (a scalar whose text form fully matches the pattern, which
    *   runs to the closing brace at the very end of the string node). A placeholder asserts type and shape at its
-   *   position; it never matches a missing key or a JSON {@code null}.</li>
+   *   position; it never matches a missing key or a JSON {@code null}.
+   *   <p>
+   *   A colon after the placeholder name starts an argument: {@code regex} takes its pattern bare, while
+   *   {@code anyNumber}, {@code anyString}, and {@code anyInstant} take an inclusive range —
+   *   {@code "${anyNumber:[-10:100]}"} bounds the value, {@code "${anyString:[0:100]}"} bounds the length, and
+   *   {@code "${anyInstant:[2026-01-01T00:00:00Z/2026-12-31T00:00:00Z]}"} bounds the instant using ISO 8601 interval
+   *   notation (a slash separator, because instants contain colons). Either bound may be empty for an open end, but
+   *   not both.</li>
    * </ul>
    * <p>
    * NOTE: {@code anyInstant} is an ISO instant, not a milliseconds since Epoch.
@@ -400,18 +407,23 @@ public class JSONBodyAsserter extends BodyAsserter {
   }
 
   /**
-   * Whether the actual value satisfies a placeholder. Placeholders never match JSON {@code null}.
+   * Whether the actual value satisfies a placeholder, including its range when one was supplied ({@code anyNumber}
+   * ranges bound the value, {@code anyString} ranges bound the length, and {@code anyInstant} ranges bound the
+   * instant). Placeholders never match JSON {@code null}.
    */
   private boolean matches(ExpectedJSONFile.Placeholder placeholder, Object actual) {
     if (actual == null) {
       return false;
     }
 
+    ExpectedJSONFile.Range range = placeholder.range();
     return switch (placeholder.name()) {
       case "anyBoolean" -> actual instanceof Boolean;
-      case "anyInstant" -> actual instanceof String s && isInstant(s);
-      case "anyNumber" -> actual instanceof Long || actual instanceof BigInteger || actual instanceof BigDecimal;
-      case "anyString" -> actual instanceof String;
+      case "anyInstant" -> actual instanceof String s && isInstant(s) &&
+          (range == null || range.contains(ExpectedJSONFile.epochNanos(Instant.parse(s))));
+      case "anyNumber" -> (actual instanceof Long || actual instanceof BigInteger || actual instanceof BigDecimal) &&
+          (range == null || range.contains(new BigDecimal(actual.toString())));
+      case "anyString" -> actual instanceof String s && (range == null || range.contains(BigDecimal.valueOf(s.length())));
       case "anyUUID" -> actual instanceof String s && isUUID(s);
       case "regex" -> !(actual instanceof Map) && !(actual instanceof List) &&
           placeholder.pattern().matcher(JSONTools.asText(actual)).matches();
