@@ -173,4 +173,15 @@ public class WebTestTest extends BaseWebTest {
                                       .equalTo("{\"foo\": \"bar\"}"));
     }
   }
+
+  @Test
+  public void url_parametersEncodeDistinctKeysAndValues() {
+    try (var _ = new Web().get("/echo", (req, res) -> res.getWriter().write(req.getQueryString())).start(PORT)) {
+      var string = new StringBodyAsserter();
+      new WebTest(PORT).withURLParameter("foo", "bar")
+                       .withURLParameter("one", "two")
+                       .get("/echo")
+                       .assertBodyAs(string, s -> s.equalTo("foo=bar&one=two"));
+    }
+  }
 }
