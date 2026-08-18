@@ -72,7 +72,7 @@ public class WebTest {
       builder.append('?')
              .append(
                  urlParameters.stream()
-                              .map(e -> URLEncoder.encode(e.getKey(), UTF_8) + "=" + URLEncoder.encode(e.getKey(), UTF_8))
+                              .map(e -> URLEncoder.encode(e.getKey(), UTF_8) + "=" + URLEncoder.encode(e.getValue(), UTF_8))
                               .collect(Collectors.joining("&"))
              );
     }
