@@ -2,7 +2,7 @@
  * Copyright (c) 2025-2026 The Latte Project
  * SPDX-License-Identifier: MIT
  */
-project(group: "org.lattejava", name: "web", version: "0.7.0", licenses: ["MIT"]) {
+project(group: "org.lattejava", name: "web", version: "0.8.0", licenses: ["MIT"]) {
   workflow {
     standard()
   }
@@ -22,7 +22,14 @@ project(group: "org.lattejava", name: "web", version: "0.7.0", licenses: ["MIT"]
       dependency(id: "org.lattejava:jwt:0.2.0")
     }
     group(name: "test-compile", export: false) {
+      dependency(id: "io.avaje:avaje-applog:1.2")
+      dependency(id: "io.avaje:avaje-inject:12.6")
+      dependency(id: "jakarta.inject:jakarta.inject-api:2.0.1")
+      dependency(id: "org.jspecify:jspecify:1.0.0")
       dependency(id: "org.testng:testng:7.12.0")
+    }
+    group(name: "test-compile-processors", export: false) {
+      dependency(id: "io.avaje:avaje-inject-generator:12.6")
     }
   }
 
@@ -41,6 +48,7 @@ release = loadPlugin(id: "org.lattejava.plugin:release-git:0.6.0")
 
 // Plugin settings
 java.settings.javaVersion = "25"
+java.settings.processorDependencies << [group: "test-compile-processors", transitive: true, fetchSource: false, transitiveGroups: ["compile", "runtime"]]
 javaTestNG.settings.javaVersion = "25"
 
 target(name: "clean", description: "Cleans the project") {

@@ -55,4 +55,12 @@ public abstract class BaseWebTest {
                                      .build();
     return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
   }
+
+  protected HttpResponse<String> sendWithBody(String method, String path, String body) throws Exception {
+    HttpRequest request = HttpRequest.newBuilder()
+                                     .uri(URI.create(BASE_URL + path))
+                                     .method(method, HttpRequest.BodyPublishers.ofString(body))
+                                     .build();
+    return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+  }
 }

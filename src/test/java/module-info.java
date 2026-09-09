@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 module org.lattejava.web.tests {
+  requires io.avaje.inject;
   requires java.net.http;
   requires org.lattejava.http;
   requires org.lattejava.jwt;
@@ -15,8 +16,11 @@ module org.lattejava.web.tests {
   exports org.lattejava.web.tests.jte;
 
   opens org.lattejava.web.tests to org.lattejava.web, org.testng;
+  opens org.lattejava.web.tests.injection to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.jte to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.middleware to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.oidc to org.lattejava.web, org.testng;
   opens org.lattejava.web.tests.test to org.lattejava.web, org.testng;
+
+  provides io.avaje.inject.spi.InjectExtension with org.lattejava.web.tests.injection.InjectionModule;
 }

@@ -25,6 +25,7 @@ public class Web implements AutoCloseable {
   private final AtomicBoolean started;
   private final RouteTrie trie;
   private Path baseDir;
+  private Injector injector;
   private Handler missingHandler;
   private HTTPServer server;
   private Thread shutdownHook;
@@ -37,12 +38,13 @@ public class Web implements AutoCloseable {
     this.middlewareTrie = new MiddlewareTrie();
   }
 
-  private Web(String pathPrefix, RouteTrie trie, AtomicBoolean started, MiddlewareTrie middlewareTrie) {
+  private Web(String pathPrefix, RouteTrie trie, AtomicBoolean started, MiddlewareTrie middlewareTrie, Injector injector) {
     this.isChild = true;
     this.pathPrefix = pathPrefix;
     this.trie = trie;
     this.started = started;
     this.middlewareTrie = middlewareTrie;
+    this.injector = injector;
   }
 
   /**
@@ -141,6 +143,75 @@ public class Web implements AutoCloseable {
    */
   public Web get(String pathSpec, Handler handler, Middleware... middlewares) {
     return route(List.of("GET"), pathSpec, handler, middlewares);
+  }
+
+  /**
+   * Returns a middleware that resolves an instance of the given type from the injector on each request and delegates
+   * to it.
+   *
+   * @param type The middleware type.
+   * @return The delegating middleware.
+   * @throws IllegalStateException if no injector has been configured.
+   */
+  public Middleware inject(Class<? extends Middleware> type) {
+    Objects.requireNonNull(type, "type cannot be null");
+    Injector current = requireInjector();
+    return (req, res, chain) -> current.get(type).handle(req, res, chain);
+  }
+
+  /**
+   * Returns a handler that resolves a controller of the given type from the injector on each request and invokes the
+   * given method on it.
+   *
+   * @param <C>    The controller type.
+   * @param type   The controller type.
+   * @param method The controller method to invoke.
+   * @return The delegating handler.
+   * @throws IllegalStateException if no injector has been configured.
+   */
+  public <C> Handler inject(Class<C> type, ControllerHandler<C> method) {
+    Objects.requireNonNull(type, "type cannot be null");
+    Objects.requireNonNull(method, "method cannot be null");
+    Injector current = requireInjector();
+    return (req, res) -> method.handle(current.get(type), req, res);
+  }
+
+  /**
+   * Returns a body handler that resolves a controller of the given type from the injector on each request and invokes
+   * the given method on it with the parsed body.
+   *
+   * @param <C>    The controller type.
+   * @param <T>    The type of the parsed body.
+   * @param type   The controller type.
+   * @param method The controller method to invoke.
+   * @return The delegating body handler.
+   * @throws IllegalStateException if no injector has been configured.
+   */
+  public <C, T> BodyHandler<T> inject(Class<C> type, ControllerBodyHandler<C, T> method) {
+    Objects.requireNonNull(type, "type cannot be null");
+    Objects.requireNonNull(method, "method cannot be null");
+    Injector current = requireInjector();
+    return (req, res, body) -> method.handle(current.get(type), req, res, body);
+  }
+
+  /**
+   * Sets the injector used by {@link #inject(Class)} and {@link #inject(Class, ControllerHandler)}. The injector is
+   * called on each request, so it controls instance lifetime. Must be called before {@code inject}.
+   *
+   * @param injector The injector.
+   * @return This Web instance for chaining.
+   * @throws IllegalStateException if called on a prefix child Web, or after {@link #start(int)}.
+   */
+  public Web injector(Injector injector) {
+    if (isChild) {
+      throw new IllegalStateException("Cannot call injector on a prefix child Web instance");
+    }
+    if (started.get()) {
+      throw new IllegalStateException("Cannot set injector after Web has been started");
+    }
+    Objects.requireNonNull(injector, "injector must not be null");
+    this.injector = injector;
+    return this;
   }
 
   /**
@@ -276,7 +347,7 @@ public class Web implements AutoCloseable {
 
     Objects.requireNonNull(newPrefix, "newPrefix cannot be null");
     Objects.requireNonNull(group, "group cannot be null");
-    Web child = new Web(pathPrefix + newPrefix, trie, started, middlewareTrie);
+    Web child = new Web(pathPrefix + newPrefix, trie, started, middlewareTrie, injector);
     group.accept(child);
     return this;
   }
@@ -494,5 +565,12 @@ public class Web implements AutoCloseable {
       // ExceptionHandler runs inside the chain and gets first crack; this only handles what reaches the top.
       ExceptionHandler.DEFAULT_RENDERER.render(request, response, e);
     }
+  }
+
+  private Injector requireInjector() {
+    if (injector == null) {
+      throw new IllegalStateException("No injector configured. Call injector() before inject()");
+    }
+    return injector;
   }
 }

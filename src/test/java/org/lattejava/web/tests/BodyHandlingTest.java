@@ -11,6 +11,7 @@ import module org.testng;
 
 import static org.testng.Assert.*;
 
+@SuppressWarnings("EmptyTryBlock")
 public class BodyHandlingTest extends BaseWebTest {
 
   // Helper: a BodySupplier that reads the raw bytes as a UTF-8 String
@@ -81,13 +82,14 @@ public class BodyHandlingTest extends BaseWebTest {
 
   @Test(expectedExceptions = NullPointerException.class)
   public void body_nullHandler_throws() {
-    new Web().post("/x", null, STRING_SUPPLIER);
+    try (var _ = new Web().post("/x", null, STRING_SUPPLIER)) {
+    }
   }
 
   @Test(expectedExceptions = NullPointerException.class)
   public void body_nullSupplier_throws() {
-    new Web().post("/x", (_, _, _) -> {
-    }, (BodySupplier<String>) null);
+    try (var _ = new Web().post("/x", (_, _, _) -> {}, (BodySupplier<String>) null)) {
+    }
   }
 
   @Test
@@ -228,14 +230,5 @@ public class BodyHandlingTest extends BaseWebTest {
       assertEquals(response.body(), "{\"error\":\"BadRequestException\", \"message\":\"body was rejected\"}");
       assertNull(response.headers().firstValue("X-Handler-Ran").orElse(null));
     }
-  }
-
-  // Helper: a POST with a string body
-  private HttpResponse<String> sendWithBody(String method, String path, String body) throws Exception {
-    HttpRequest request = HttpRequest.newBuilder()
-                                     .uri(URI.create(BASE_URL + path))
-                                     .method(method, HttpRequest.BodyPublishers.ofString(body))
-                                     .build();
-    return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
   }
 }
