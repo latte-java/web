@@ -809,7 +809,7 @@ In `start(int port)`, immediately before the `HTTPServer newServer = ...` block,
         .withHandler(this::handleRequest)
         .withListener(new HTTPListenerConfiguration(port))
         .withLoggerFactory(factory)
-        .withBaseDir(baseDir != null ? baseDir : Paths.get("."))
+        .withBaseDir(baseDir != null ? baseDir : Path.of("."))
         .start();
 ```
 
@@ -934,7 +934,7 @@ In `Web.java`, replace the existing `start(int port)` method with both the conve
         .withHandler(this::handleRequest)
         .withListener(listener)
         .withLoggerFactory(factory)
-        .withBaseDir(baseDir != null ? baseDir : Paths.get("."))
+        .withBaseDir(baseDir != null ? baseDir : Path.of("."))
         .start();
 
     Thread hook;

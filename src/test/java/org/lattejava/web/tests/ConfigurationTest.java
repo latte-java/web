@@ -16,7 +16,7 @@ import static org.testng.Assert.*;
  * Tests the Configuration class against the properties files under {@code src/test/projects/configuration}.
  */
 public class ConfigurationTest {
-  private static final Path PROJECT_DIR = Paths.get("src/test/projects/configuration");
+  private static final Path PROJECT_DIR = Path.of("src/test/projects/configuration");
   private static final Path APP = PROJECT_DIR.resolve("app.properties");
   private static final Path FIRST = PROJECT_DIR.resolve("first.properties");
   private static final Path SECOND = PROJECT_DIR.resolve("second.properties");

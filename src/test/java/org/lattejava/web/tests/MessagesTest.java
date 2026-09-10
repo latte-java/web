@@ -20,7 +20,7 @@ import static org.testng.Assert.*;
  * @author Brian Pontarelli
  */
 public class MessagesTest extends BaseWebTest {
-  private static final Path PROJECT_DIR = Paths.get("src/test/projects/message-bundles");
+  private static final Path WEB_DIR = Path.of("src/test/projects/message-bundles/web");
 
   private static Object argument(String value) {
     try {
@@ -40,7 +40,7 @@ public class MessagesTest extends BaseWebTest {
   @Test
   public void constructor_explicitLocaleOverridesRequest() {
     try (var web = new Web()) {
-      web.baseDir(PROJECT_DIR)
+      web.baseDir(WEB_DIR)
          .get("/admin/users/edit", (req, res) -> respond(res, new Messages(req, Locale.GERMAN).get("save")))
          .start(PORT);
 
@@ -53,7 +53,7 @@ public class MessagesTest extends BaseWebTest {
   @Test
   public void constructor_rejectsNulls() {
     try (var web = new Web()) {
-      web.baseDir(PROJECT_DIR)
+      web.baseDir(WEB_DIR)
          .get("/", (req, res) -> {
            assertThrows(NullPointerException.class, () -> new Messages((HTTPRequest) null));
            assertThrows(NullPointerException.class, () -> new Messages(req, null));
@@ -73,18 +73,18 @@ public class MessagesTest extends BaseWebTest {
   @Test
   public void constructor_withoutRequest() {
     // Same lookup rules as a request: locale chain within a level, then the parent levels
-    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.ENGLISH).get("save"), "Save");
-    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMAN).get("save"), "Speichern");
-    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMANY).get("save"), "Speichern (DE)");
-    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMANY).get("title"), "Edit User");
-    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMANY).get("shared"), "admin-de");
-    assertEquals(new Messages(PROJECT_DIR, "/admin/users/", Locale.ENGLISH).get("title"), "Users");
-    assertEquals(new Messages(PROJECT_DIR, "/admin/users", Locale.ENGLISH).get("title"), "Admin");
-    assertEquals(new Messages(PROJECT_DIR, "/", Locale.US).get("greeting", "Brian"), "Hello Brian");
-    assertEquals(new Messages(PROJECT_DIR, "/", Locale.GERMANY).get("count", 1234.5), "Total 1.234,5");
+    assertEquals(new Messages(WEB_DIR, "/admin/users/edit", Locale.ENGLISH).get("save"), "Save");
+    assertEquals(new Messages(WEB_DIR, "/admin/users/edit", Locale.GERMAN).get("save"), "Speichern");
+    assertEquals(new Messages(WEB_DIR, "/admin/users/edit", Locale.GERMANY).get("save"), "Speichern (DE)");
+    assertEquals(new Messages(WEB_DIR, "/admin/users/edit", Locale.GERMANY).get("title"), "Edit User");
+    assertEquals(new Messages(WEB_DIR, "/admin/users/edit", Locale.GERMANY).get("shared"), "admin-de");
+    assertEquals(new Messages(WEB_DIR, "/admin/users/", Locale.ENGLISH).get("title"), "Users");
+    assertEquals(new Messages(WEB_DIR, "/admin/users", Locale.ENGLISH).get("title"), "Admin");
+    assertEquals(new Messages(WEB_DIR, "/", Locale.US).get("greeting", "Brian"), "Hello Brian");
+    assertEquals(new Messages(WEB_DIR, "/", Locale.GERMANY).get("count", 1234.5), "Total 1.234,5");
 
     // find, has, and locale
-    Messages messages = new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMAN);
+    Messages messages = new Messages(WEB_DIR, "/admin/users/edit", Locale.GERMAN);
     assertNull(messages.find("nope"));
     assertTrue(messages.has("save"));
     assertFalse(messages.has("nope"));
@@ -92,26 +92,26 @@ public class MessagesTest extends BaseWebTest {
     assertThrows(MissingMessageException.class, () -> messages.get("nope"));
 
     // The two-argument form uses the JVM default locale
-    Messages defaulted = new Messages(PROJECT_DIR, "/admin/users/edit");
+    Messages defaulted = new Messages(WEB_DIR, "/admin/users/edit");
     assertEquals(defaulted.locale(), Locale.getDefault());
-    assertEquals(defaulted.get("save"), new Messages(PROJECT_DIR, "/admin/users/edit", Locale.getDefault()).get("save"));
+    assertEquals(defaulted.get("save"), new Messages(WEB_DIR, "/admin/users/edit", Locale.getDefault()).get("save"));
 
     // A missing directory defines nothing
-    assertNull(new Messages(PROJECT_DIR.resolve("nowhere"), "/", Locale.ENGLISH).find("title"));
+    assertNull(new Messages(WEB_DIR.resolve("nowhere"), "/", Locale.ENGLISH).find("title"));
 
     // Nulls
     assertThrows(NullPointerException.class, () -> new Messages(null, "/", Locale.ENGLISH));
-    assertThrows(NullPointerException.class, () -> new Messages(PROJECT_DIR, null, Locale.ENGLISH));
-    assertThrows(NullPointerException.class, () -> new Messages(PROJECT_DIR, "/", null));
-    assertThrows(NullPointerException.class, () -> new Messages(PROJECT_DIR, null));
+    assertThrows(NullPointerException.class, () -> new Messages(WEB_DIR, null, Locale.ENGLISH));
+    assertThrows(NullPointerException.class, () -> new Messages(WEB_DIR, "/", null));
+    assertThrows(NullPointerException.class, () -> new Messages(WEB_DIR, null));
   }
 
   @Test
   public void constructor_withoutRequestMatchesServer() {
     try (var _ = messagesServer()) {
       // The intended use: fetch the expected text from the files and compare it to what the server rendered
-      Messages german = new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMAN);
-      Messages defaulted = new Messages(PROJECT_DIR, "/admin/users/edit");
+      Messages german = new Messages(WEB_DIR, "/admin/users/edit", Locale.GERMAN);
+      Messages defaulted = new Messages(WEB_DIR, "/admin/users/edit");
       var tester = new WebTest(PORT);
       tester.withHeader("Accept-Language", "de")
             .withHeader("X-Key", "save")
@@ -328,7 +328,7 @@ public class MessagesTest extends BaseWebTest {
 
   @Test
   public void get_pathTraversalStaysInsideDirectory() {
-    // web/secret.properties sits outside web/messages and must not be reachable
+    // secret.properties sits in the base directory, outside messages, and must not be reachable
     try (var _ = messagesServer()) {
       new WebTest(PORT).withHeader("X-Key", "title")
                        .get("/%2e%2e/secret")
@@ -355,8 +355,8 @@ public class MessagesTest extends BaseWebTest {
   @Test
   public void jte() {
     try (var web = new Web()) {
-      var templates = new JTETemplates(PROJECT_DIR.resolve("web/templates"));
-      web.baseDir(PROJECT_DIR)
+      var templates = new JTETemplates(WEB_DIR.resolve("templates"));
+      web.baseDir(WEB_DIR)
          .get("/", (req, res) -> templates.html("messages.jte", req, res, Map.of()))
          .start(PORT);
 
@@ -382,7 +382,7 @@ public class MessagesTest extends BaseWebTest {
   @Test
   public void missingDirectory() {
     try (var web = new Web()) {
-      web.baseDir(PROJECT_DIR.resolve("nowhere"))
+      web.baseDir(WEB_DIR.resolve("nowhere"))
          .get("/", (req, res) -> {
            Messages messages = new Messages(req);
            respond(res, messages.has("title") + ":" + messages.find("title"));
@@ -455,7 +455,7 @@ public class MessagesTest extends BaseWebTest {
    * {@code get}, or {@code has}.
    */
   private Web messagesServer() {
-    return new Web().baseDir(PROJECT_DIR)
+    return new Web().baseDir(WEB_DIR)
                     .install((req, res, chain) -> {
                       Messages messages = new Messages(req);
                       res.setHeader("X-Title", messages.get("title"));

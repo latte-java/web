@@ -61,7 +61,8 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Sets the base directory for this Web's HTTP context. If not called, then {@code .} is used.
+   * Sets the base directory for this Web's HTTP context. If not called, then {@code .} is used. Static files served by
+   * {@link #files(String)} and the {@link Messages} directory are resolved under it.
    *
    * @param baseDir The base directory for file resolution.
    * @return This Web instance for chaining.
@@ -484,7 +485,7 @@ public class Web implements AutoCloseable {
     HTTPServer newServer = new HTTPServer()
         .withHandler(this::handleRequest)
         .withListeners(listeners)
-        .withBaseDir(baseDir != null ? baseDir : Paths.get(".")) // Default to current working directory
+        .withBaseDir(baseDir != null ? baseDir : Path.of(".")) // Default to current working directory
         .start();
 
     Thread hook;

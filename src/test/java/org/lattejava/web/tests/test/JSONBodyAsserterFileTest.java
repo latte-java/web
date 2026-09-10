@@ -21,8 +21,8 @@ import static org.testng.Assert.*;
  * subclasses that pin the CI detection, so the suite never depends on the real {@code CI} environment variable.
  */
 public class JSONBodyAsserterFileTest {
-  private static final Path PROJECT_DIR = Paths.get("src/test/projects/json-body-asserter");
-  private static final Path SCRATCH_DIR = Paths.get("build/test-scratch/json-body-asserter");
+  private static final Path PROJECT_DIR = Path.of("src/test/projects/json-body-asserter");
+  private static final Path SCRATCH_DIR = Path.of("build/test-scratch/json-body-asserter");
 
   private static Path fixture(String name) {
     return PROJECT_DIR.resolve(name);

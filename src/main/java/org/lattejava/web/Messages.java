@@ -76,7 +76,7 @@ public final class Messages {
   /**
    * The messages directory, relative to the server's base directory.
    */
-  public static final String DIRECTORY = "web/messages";
+  public static final String DIRECTORY = "messages";
 
   private static final ResourceBundle.Control CONTROL = ResourceBundle.Control.getControl(ResourceBundle.Control.FORMAT_PROPERTIES);
   private static final String INDEX = "index";

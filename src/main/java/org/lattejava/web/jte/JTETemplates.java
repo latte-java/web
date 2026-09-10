@@ -30,16 +30,18 @@ import module org.lattejava.http;
  * When a {@link Map} is supplied, its entries are bound to template parameters named using the map key.
  * <p>
  * The default constructor configures a {@link TemplateEngine} that reads {@code .jte} sources from {@code web/templates}
- * relative to the working directory. For deployed applications, supply a custom {@link TemplateEngine} (for example, a
- * precompiled engine) via {@link #JTETemplates(TemplateEngine)}.
+ * relative to the working directory. It does not follow {@link Web#baseDir(Path)}; pass
+ * {@code baseDir.resolve("templates")} to {@link #JTETemplates(Path)} to keep templates beside messages and static
+ * files. For deployed applications, supply a custom {@link TemplateEngine} (for example, a precompiled engine) via
+ * {@link #JTETemplates(TemplateEngine)}.
  *
  * @author Brian Pontarelli
  */
 @SuppressWarnings("unused")
 public class JTETemplates {
-  private static final Path DEFAULT_CLASSES_DIR = Paths.get("build/jte-classes");
+  private static final Path DEFAULT_CLASSES_DIR = Path.of("build/jte-classes");
   private static final String DEFAULT_MODEL_NAME = "model";
-  private static final Path DEFAULT_TEMPLATE_DIR = Paths.get("web/templates");
+  private static final Path DEFAULT_TEMPLATE_DIR = Path.of("web/templates");
   private final TemplateEngine engine;
 
   /**

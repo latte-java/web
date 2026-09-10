@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-10
+
+### Changed
+
+- **Breaking:** `Messages` reads from `<baseDir>/messages` instead of `<baseDir>/web/messages`. `Web.baseDir(Path)` now names the same directory for messages and for files served by `files()`, which is the application's `web` directory.
+
 ## [0.10.0] - 2026-09-10
 
 ### Added

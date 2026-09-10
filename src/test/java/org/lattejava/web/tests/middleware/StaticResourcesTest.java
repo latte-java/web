@@ -20,7 +20,7 @@ import static org.testng.Assert.*;
 public class StaticResourcesTest extends BaseWebTest {
   private static final DateTimeFormatter HTTP_DATE =
       DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
-  private static final Path PROJECT_DIR = Paths.get("src/test/projects/static-resources");
+  private static final Path PROJECT_DIR = Path.of("src/test/projects/static-resources");
 
   // Helper: parse an HTTP-date header value into an Instant (server uses RFC 1123 format).
   private static Instant parseHTTPDate(String value) {

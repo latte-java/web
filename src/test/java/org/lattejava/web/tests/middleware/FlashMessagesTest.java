@@ -650,7 +650,7 @@ public class FlashMessagesTest extends BaseWebTest {
   @Test
   public void jte_rendersMessages() {
     try (var web = new Web()) {
-      var templates = new JTETemplates(Paths.get("src/test/jte"));
+      var templates = new JTETemplates(Path.of("src/test/jte"));
       web.install(new FlashMessages());
       web.post("/add", (req, res) -> {
         new Flash(req).addMessage("success", "Saved <b>bold</b>").addMessage("error", "Second");

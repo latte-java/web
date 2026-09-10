@@ -114,7 +114,7 @@ public Web start(HTTPListenerConfiguration listener) {
       .withHandler(this::handleRequest)
       .withListener(listener)
       .withLoggerFactory(factory)
-      .withBaseDir(baseDir != null ? baseDir : Paths.get("."))
+      .withBaseDir(baseDir != null ? baseDir : Path.of("."))
       .start();
 
   Thread hook;

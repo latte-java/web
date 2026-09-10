@@ -17,7 +17,7 @@ public class JTETemplatesTest extends BaseWebTest {
   @Test
   public void multipleModels() throws Exception {
     try (var web = new Web()) {
-      var templates = new JTETemplates(Paths.get("src/test/jte"));
+      var templates = new JTETemplates(Path.of("src/test/jte"));
       var model = new Model("One");
       var model2 = new Model("Two");
       web.get("/", (req, res) -> templates.html(req, res,
@@ -37,7 +37,7 @@ public class JTETemplatesTest extends BaseWebTest {
   @Test
   public void namedTemplate_multipleModels() throws Exception {
     try (var web = new Web()) {
-      var templates = new JTETemplates(Paths.get("src/test/jte"));
+      var templates = new JTETemplates(Path.of("src/test/jte"));
       var model = new Model("One");
       var model2 = new Model("Two");
       web.get("/", (req, res) -> templates.html("named-template.jte", req, res,
@@ -57,7 +57,7 @@ public class JTETemplatesTest extends BaseWebTest {
   @Test
   public void namedTemplate_singleModel() throws Exception {
     try (var web = new Web()) {
-      var templates = new JTETemplates(Paths.get("src/test/jte"));
+      var templates = new JTETemplates(Path.of("src/test/jte"));
       var model = new Model("Test");
       web.get("/", (req, res) -> templates.html("named-template.jte", req, res, model));
       web.start(PORT);
@@ -70,7 +70,7 @@ public class JTETemplatesTest extends BaseWebTest {
   @Test
   public void noModel() throws Exception {
     try (var web = new Web()) {
-      var templates = new JTETemplates(Paths.get("src/test/jte"));
+      var templates = new JTETemplates(Path.of("src/test/jte"));
       web.get("/", templates::html);
       web.start(PORT);
 
@@ -81,7 +81,7 @@ public class JTETemplatesTest extends BaseWebTest {
 
   @Test
   public void render_multipleModels() {
-    var templates = new JTETemplates(Paths.get("src/test/jte"));
+    var templates = new JTETemplates(Path.of("src/test/jte"));
     var model1 = new Model("One");
     var model2 = new Model("Two");
     String result = templates.render("named-template.jte",
@@ -95,14 +95,14 @@ public class JTETemplatesTest extends BaseWebTest {
 
   @Test
   public void render_noModel() {
-    var templates = new JTETemplates(Paths.get("src/test/jte"));
+    var templates = new JTETemplates(Path.of("src/test/jte"));
     String result = templates.render("index.jte");
     assertEquals(result, "Template");
   }
 
   @Test
   public void render_singleModel() {
-    var templates = new JTETemplates(Paths.get("src/test/jte"));
+    var templates = new JTETemplates(Path.of("src/test/jte"));
     var model = new Model("Test");
     String result = templates.render("named-template.jte", model);
     assertEquals(result, "Template with model=Test");
@@ -111,7 +111,7 @@ public class JTETemplatesTest extends BaseWebTest {
   @Test
   public void singleModel() throws Exception {
     try (var web = new Web()) {
-      var templates = new JTETemplates(Paths.get("src/test/jte"));
+      var templates = new JTETemplates(Path.of("src/test/jte"));
       var model = new Model("Test");
       web.get("/", (req, res) -> templates.html(req, res, model));
       web.start(PORT);
