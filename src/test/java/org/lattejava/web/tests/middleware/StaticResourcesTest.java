@@ -14,11 +14,13 @@ import org.lattejava.web.tests.*;
 
 import static org.testng.Assert.*;
 
+/**
+ * Tests the StaticResources middleware against the files under {@code src/test/projects/static-resources}.
+ */
 public class StaticResourcesTest extends BaseWebTest {
   private static final DateTimeFormatter HTTP_DATE =
       DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
-
-  private Path tempDir;
+  private static final Path PROJECT_DIR = Paths.get("src/test/projects/static-resources");
 
   // Helper: parse an HTTP-date header value into an Instant (server uses RFC 1123 format).
   private static Instant parseHTTPDate(String value) {
@@ -31,7 +33,7 @@ public class StaticResourcesTest extends BaseWebTest {
       web.get("/x", (_, res) -> res.setStatus(200));
       web.start(PORT);
       try {
-        web.baseDir(tempDir);
+        web.baseDir(PROJECT_DIR);
         org.testng.Assert.fail("Expected IllegalStateException");
       } catch (IllegalStateException expected) {
         // expected
@@ -53,7 +55,7 @@ public class StaticResourcesTest extends BaseWebTest {
   public void doesNotMatchPrefixWithoutSlashBoundary() throws Exception {
     // Request /assetsX should NOT be treated as under /assets
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets");
+      web.baseDir(PROJECT_DIR).files("/assets");
       web.get("/assetsX", (_, res) -> res.setStatus(203));
       web.start(PORT);
 
@@ -66,21 +68,21 @@ public class StaticResourcesTest extends BaseWebTest {
   public void explicitSubdirectoryMapping() throws Exception {
     // URL prefix /public maps to subdirectory "assets" (different names)
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/public", "assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/public", "assets").start(PORT);
 
       Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       HttpResponse<String> response = send("GET", "/public/app.css");
       Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-      assertStaticResourceHeaders(response, tempDir.resolve("assets/app.css"), "text/css", start, end);
-      assertEquals(response.body(), "body { color: red; }");
+      assertStaticResourceHeaders(response, PROJECT_DIR.resolve("assets/app.css"), "text/css", start, end);
+      assertEquals(response.body(), "body { color: red; }\n");
     }
   }
 
   @Test
   public void fallsThrough_forPathsOutsidePrefix() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets");
+      web.baseDir(PROJECT_DIR).files("/assets");
       web.get("/api/foo", (_, res) -> res.setStatus(201));
       web.start(PORT);
 
@@ -92,7 +94,7 @@ public class StaticResourcesTest extends BaseWebTest {
   @Test
   public void filter_canBlockRequest() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir);
+      web.baseDir(PROJECT_DIR);
       web.install(new StaticResources("/assets", "assets", Duration.ofDays(7),
           (uri, _) -> !uri.endsWith(".js")));
       web.get("/assets/app.js", (_, res) -> res.setStatus(202)); // fall-through target
@@ -102,7 +104,7 @@ public class StaticResourcesTest extends BaseWebTest {
       Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       HttpResponse<String> css = send("GET", "/assets/app.css");
       Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-      assertStaticResourceHeaders(css, tempDir.resolve("assets/app.css"), "text/css", start, end);
+      assertStaticResourceHeaders(css, PROJECT_DIR.resolve("assets/app.css"), "text/css", start, end);
 
       // Filter blocks JS → falls through to the route
       HttpResponse<String> js = send("GET", "/assets/app.js");
@@ -113,44 +115,42 @@ public class StaticResourcesTest extends BaseWebTest {
   @Test
   public void head_returnsHeadersWithoutBody() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/assets").start(PORT);
 
       Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       HttpResponse<String> response = send("HEAD", "/assets/app.css");
       Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-      assertStaticResourceHeaders(response, tempDir.resolve("assets/app.css"), "text/css", start, end);
+      assertStaticResourceHeaders(response, PROJECT_DIR.resolve("assets/app.css"), "text/css", start, end);
       assertEquals(response.body(), "");
     }
   }
 
   @Test
   public void preventsPathTraversal() throws Exception {
-    // Create a secret file OUTSIDE tempDir (as a sibling)
-    Path secret = tempDir.getParent().resolve("latte-secret-" + System.nanoTime() + ".txt");
-    Files.writeString(secret, "SECRET");
+    // The repository's LICENSE is four directories above the project's base directory, so it exists but is outside
+    Path license = PROJECT_DIR.resolve("../../../../LICENSE");
+    assertTrue(Files.exists(license), "Test assumes the repository LICENSE exists at [" + license + "]");
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/assets").start(PORT);
 
-      // Request that attempts to traverse up out of tempDir/assets
-      HttpResponse<String> response = send("GET", "/assets/../../" + secret.getFileName());
+      // Request that attempts to traverse up out of <baseDir>/assets
+      HttpResponse<String> response = send("GET", "/assets/../../../../../LICENSE");
       // HTTPContext.resolve() returns null for escapes → 404
       assertEquals(response.statusCode(), 404);
-    } finally {
-      Files.deleteIfExists(secret);
     }
   }
 
   @Test
   public void returns304_onIfModifiedSinceAtOrAfterMtime() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/assets").start(PORT);
 
       Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       HttpResponse<String> first = send("GET", "/assets/app.css");
       Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-      assertStaticResourceHeaders(first, tempDir.resolve("assets/app.css"), "text/css", start, end);
+      assertStaticResourceHeaders(first, PROJECT_DIR.resolve("assets/app.css"), "text/css", start, end);
 
       // Second request with If-Modified-Since equal to Last-Modified → 304
       String lastModified = first.headers().firstValue("Last-Modified").orElseThrow();
@@ -163,7 +163,7 @@ public class StaticResourcesTest extends BaseWebTest {
   @Test
   public void returns404_forMissingFile() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/assets").start(PORT);
 
       HttpResponse<String> response = send("GET", "/assets/does-not-exist");
       assertEquals(response.statusCode(), 404);
@@ -173,67 +173,44 @@ public class StaticResourcesTest extends BaseWebTest {
   @Test
   public void serves200_onIfModifiedSinceBeforeMtime() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/assets").start(PORT);
 
-      String before = HTTP_DATE.format(ZonedDateTime.now(ZoneOffset.UTC).minusDays(30));
+      // Well before any checkout of the project files
+      String before = HTTP_DATE.format(ZonedDateTime.of(2000, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC));
 
       Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       HttpResponse<String> response = sendWithHeader("GET", "/assets/app.css", "If-Modified-Since", before);
       Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-      assertStaticResourceHeaders(response, tempDir.resolve("assets/app.css"), "text/css", start, end);
+      assertStaticResourceHeaders(response, PROJECT_DIR.resolve("assets/app.css"), "text/css", start, end);
     }
   }
 
   @Test
   public void servesNestedFile() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/assets").start(PORT);
 
       Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       HttpResponse<String> response = send("GET", "/assets/sub/nested.txt");
       Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-      assertStaticResourceHeaders(response, tempDir.resolve("assets/sub/nested.txt"), "text/plain", start, end);
-      assertEquals(response.body(), "nested file");
+      assertStaticResourceHeaders(response, PROJECT_DIR.resolve("assets/sub/nested.txt"), "text/plain", start, end);
+      assertEquals(response.body(), "nested file\n");
     }
   }
 
   @Test
   public void serves_fileUnderPrefix() throws Exception {
     try (var web = new Web()) {
-      web.baseDir(tempDir).files("/assets").start(PORT);
+      web.baseDir(PROJECT_DIR).files("/assets").start(PORT);
 
       Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       HttpResponse<String> response = send("GET", "/assets/app.css");
       Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-      assertStaticResourceHeaders(response, tempDir.resolve("assets/app.css"), "text/css", start, end);
-      assertEquals(response.body(), "body { color: red; }");
-    }
-  }
-
-  @BeforeMethod
-  public void setUp() throws IOException {
-    tempDir = Files.createTempDirectory("latte-static-test");
-    Files.createDirectory(tempDir.resolve("assets"));
-    Files.writeString(tempDir.resolve("assets/app.css"), "body { color: red; }");
-    Files.writeString(tempDir.resolve("assets/app.js"), "console.log('hi');");
-    Files.createDirectory(tempDir.resolve("assets/sub"));
-    Files.writeString(tempDir.resolve("assets/sub/nested.txt"), "nested file");
-  }
-
-  @AfterMethod
-  public void tearDown() throws IOException {
-    if (tempDir != null && Files.exists(tempDir)) {
-      try (var stream = Files.walk(tempDir)) {
-        stream.sorted(Comparator.reverseOrder()).forEach(p -> {
-          try {
-            Files.delete(p);
-          } catch (IOException ignored) {
-          }
-        });
-      }
+      assertStaticResourceHeaders(response, PROJECT_DIR.resolve("assets/app.css"), "text/css", start, end);
+      assertEquals(response.body(), "body { color: red; }\n");
     }
   }
 

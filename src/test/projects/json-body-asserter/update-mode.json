@@ -1,0 +1,6 @@
+{
+  "created": "${anyInstant}",
+  "id": "${id}",
+  "url": "http://localhost:${port}/",
+  "version": "0.9.0"
+}

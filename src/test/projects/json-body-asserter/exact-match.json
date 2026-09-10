@@ -1,0 +1,9 @@
+{
+  "user": {
+    "name": "Jane",
+    "age": 33,
+    "active": true,
+    "nickname": null,
+    "tags": ["admin", "user"]
+  }
+}

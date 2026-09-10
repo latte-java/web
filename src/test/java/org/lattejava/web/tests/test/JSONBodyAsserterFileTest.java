@@ -15,17 +15,31 @@ import org.lattejava.web.test.json.*;
 import static org.testng.Assert.*;
 
 /**
- * Tests for {@link JSONBodyAsserter#equalToFile(Path, Object...)}. Every test uses one of the two nested subclasses
- * that pin the CI detection, so the suite never depends on the real {@code CI} environment variable.
+ * Tests for {@link JSONBodyAsserter#equalToFile(Path, Object...)}. The expected files are checked in under
+ * {@code src/test/projects/json-body-asserter}. Tests that generate or rewrite a file work on copies under
+ * {@code build/test-scratch} so the checked-in files are never touched. Every test uses one of the two nested
+ * subclasses that pin the CI detection, so the suite never depends on the real {@code CI} environment variable.
  */
 public class JSONBodyAsserterFileTest {
-  private Path tempDir;
+  private static final Path PROJECT_DIR = Paths.get("src/test/projects/json-body-asserter");
+  private static final Path SCRATCH_DIR = Paths.get("build/test-scratch/json-body-asserter");
+
+  private static Path fixture(String name) {
+    return PROJECT_DIR.resolve(name);
+  }
+
+  /**
+   * Copies a fixture into the scratch directory so a test can rewrite it.
+   */
+  private static Path scratchCopy(String name) throws IOException {
+    Path copy = SCRATCH_DIR.resolve(name);
+    Files.copy(fixture(name), copy, StandardCopyOption.REPLACE_EXISTING);
+    return copy;
+  }
 
   @Test
-  public void equalToFile_anyBooleanPlaceholder() throws IOException {
-    Path file = writeExpected("""
-        { "flag": "${anyBoolean}" }
-        """);
+  public void equalToFile_anyBooleanPlaceholder() {
+    Path file = fixture("any-boolean.json");
 
     asserterFor("""
         { "flag": true }
@@ -42,10 +56,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_anyInstantPlaceholder() throws IOException {
-    Path file = writeExpected("""
-        { "created": "${anyInstant}" }
-        """);
+  public void equalToFile_anyInstantPlaceholder() {
+    Path file = fixture("any-instant.json");
 
     asserterFor("""
         { "created": "2026-08-14T12:34:56Z" }
@@ -59,11 +71,9 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_anyInstantRange() throws IOException {
+  public void equalToFile_anyInstantRange() {
     // ISO 8601 interval notation: slash separator, since instants contain colons.
-    Path file = writeExpected("""
-        { "created": "${anyInstant:[2026-01-01T00:00:00Z/2026-12-31T23:59:59Z]}" }
-        """);
+    Path file = fixture("any-instant-range.json");
 
     asserterFor("""
         { "created": "2026-08-15T12:00:00Z" }
@@ -88,9 +98,7 @@ public class JSONBodyAsserterFileTest {
     expectThrows(AssertionError.class, () -> after.equalToFile(file));
 
     // Open-ended start: anything up to the end instant.
-    Path openStart = writeExpected("""
-        { "created": "${anyInstant:[/2026-12-31T23:59:59Z]}" }
-        """);
+    Path openStart = fixture("any-instant-open-start.json");
     asserterFor("""
         { "created": "1999-01-01T00:00:00Z" }
         """).equalToFile(openStart);
@@ -102,10 +110,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_anyNumberPlaceholder() throws IOException {
-    Path file = writeExpected("""
-        { "count": "${anyNumber}" }
-        """);
+  public void equalToFile_anyNumberPlaceholder() {
+    Path file = fixture("any-number.json");
 
     asserterFor("""
         { "count": 42 }
@@ -122,10 +128,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_anyNumberRange() throws IOException {
-    Path file = writeExpected("""
-        { "count": "${anyNumber:[-10:100]}" }
-        """);
+  public void equalToFile_anyNumberRange() {
+    Path file = fixture("any-number-range.json");
 
     asserterFor("""
         { "count": 42 }
@@ -159,9 +163,7 @@ public class JSONBodyAsserterFileTest {
     expectThrows(AssertionError.class, () -> string.equalToFile(file));
 
     // Open-ended end: any non-negative number.
-    Path openEnd = writeExpected("""
-        { "count": "${anyNumber:[0:]}" }
-        """);
+    Path openEnd = fixture("any-number-open-end.json");
     asserterFor("""
         { "count": 123456 }
         """).equalToFile(openEnd);
@@ -173,10 +175,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_anyStringPlaceholder() throws IOException {
-    Path file = writeExpected("""
-        { "name": "${anyString}" }
-        """);
+  public void equalToFile_anyStringPlaceholder() {
+    Path file = fixture("any-string.json");
 
     asserterFor("""
         { "name": "Jane" }
@@ -190,11 +190,9 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_anyStringRange() throws IOException {
+  public void equalToFile_anyStringRange() {
     // The range bounds the string's length, inclusive on both ends.
-    Path file = writeExpected("""
-        { "name": "${anyString:[2:5]}" }
-        """);
+    Path file = fixture("any-string-range.json");
 
     asserterFor("""
         { "name": "abc" }
@@ -223,9 +221,7 @@ public class JSONBodyAsserterFileTest {
     expectThrows(AssertionError.class, () -> number.equalToFile(file));
 
     // Open-ended start: any string up to 3 characters, including empty.
-    Path openStart = writeExpected("""
-        { "name": "${anyString:[:3]}" }
-        """);
+    Path openStart = fixture("any-string-open-start.json");
     asserterFor("""
         { "name": "" }
         """).equalToFile(openStart);
@@ -237,10 +233,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_anyUUIDPlaceholder() throws IOException {
-    Path file = writeExpected("""
-        { "id": "${anyUUID}" }
-        """);
+  public void equalToFile_anyUUIDPlaceholder() {
+    Path file = fixture("any-uuid.json");
 
     asserterFor("""
         { "id": "%s" }
@@ -253,10 +247,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_arrayOrderIsAlwaysPositional() throws IOException {
-    Path file = writeExpected("""
-        { "tags": ["a", "b", "c"] }
-        """);
+  public void equalToFile_arrayOrderIsAlwaysPositional() {
+    Path file = fixture("array-order.json");
 
     // equalToFile ignores the unorderedArrays setting — order is part of the wire format.
     var asserter = asserterFor("""
@@ -273,7 +265,7 @@ public class JSONBodyAsserterFileTest {
 
   @Test
   public void equalToFile_bootstrapEscapesLiteralDollarBrace() throws IOException {
-    Path file = tempDir.resolve("escaped.json");
+    Path file = SCRATCH_DIR.resolve("escaped.json");
     var asserter = asserterFor("""
         { "message": "Use ${name} to interpolate" }
         """);
@@ -289,8 +281,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_bootstrapOnCIFailsWithoutWriting() throws IOException {
-    Path file = tempDir.resolve("missing.json");
+  public void equalToFile_bootstrapOnCIFailsWithoutWriting() {
+    Path file = SCRATCH_DIR.resolve("missing.json");
     var asserter = ciAsserterFor("""
         { "name": "Jane" }
         """);
@@ -303,7 +295,7 @@ public class JSONBodyAsserterFileTest {
   @Test
   public void equalToFile_bootstrapWritesMissingFile() throws IOException {
     // The parent directory does not exist either; bootstrap must create it.
-    Path file = tempDir.resolve("golden").resolve("response.json");
+    Path file = SCRATCH_DIR.resolve("golden").resolve("response.json");
     var asserter = asserterFor("""
         { "user": { "name": "Jane", "age": 33 } }
         """);
@@ -322,42 +314,22 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_embeddedSubstitutionInterpolates() throws IOException {
-    Path file = writeExpected("""
-        { "url": "http://localhost:${port}/" }
-        """);
-
+  public void equalToFile_embeddedSubstitutionInterpolates() {
     asserterFor("""
         { "url": "http://localhost:9012/" }
-        """).equalToFile(file, "port", 9012);
+        """).equalToFile(fixture("embedded-substitution.json"), "port", 9012);
   }
 
   @Test
-  public void equalToFile_escapedDollarBraceMatchesLiteral() throws IOException {
-    Path file = writeExpected("""
-        { "message": "Use $${name} to interpolate" }
-        """);
-
+  public void equalToFile_escapedDollarBraceMatchesLiteral() {
     // The $${ escape means the actual value must contain the literal text ${name}, not a substitution.
     asserterFor("""
         { "message": "Use ${name} to interpolate" }
-        """).equalToFile(file);
+        """).equalToFile(fixture("escaped-dollar-brace.json"));
   }
 
   @Test
-  public void equalToFile_exactMatchPasses() throws IOException {
-    Path file = writeExpected("""
-        {
-          "user": {
-            "name": "Jane",
-            "age": 33,
-            "active": true,
-            "nickname": null,
-            "tags": ["admin", "user"]
-          }
-        }
-        """);
-
+  public void equalToFile_exactMatchPasses() {
     asserterFor("""
         {
           "user": {
@@ -368,27 +340,20 @@ public class JSONBodyAsserterFileTest {
             "tags": ["admin", "user"]
           }
         }
-        """).equalToFile(file);
+        """).equalToFile(fixture("exact-match.json"));
   }
 
   @Test
-  public void equalToFile_extraFieldInActualFails() throws IOException {
-    Path file = writeExpected("""
-        { "name": "Jane" }
-        """);
-
+  public void equalToFile_extraFieldInActualFails() {
     var asserter = asserterFor("""
         { "name": "Jane", "extra": 1 }
         """);
-    expectThrows(AssertionError.class, () -> asserter.equalToFile(file));
+    expectThrows(AssertionError.class, () -> asserter.equalToFile(fixture("name.json")));
   }
 
   @Test
-  public void equalToFile_failureMessageContainsFilePath() throws IOException {
-    Path file = writeExpected("""
-        { "name": "Jane" }
-        """);
-
+  public void equalToFile_failureMessageContainsFilePath() {
+    Path file = fixture("name.json");
     var asserter = asserterFor("""
         { "name": "Bob" }
         """);
@@ -396,124 +361,90 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_malformedRanges() throws IOException {
+  public void equalToFile_malformedRanges() {
     // Missing brackets.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "count": "${anyNumber:0:100}" }
-        """)), "Malformed range");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/missing-brackets.json")),
+        "Malformed range");
 
     // Both bounds empty.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "count": "${anyNumber:[:]}" }
-        """)), "at least one bound");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/empty-bounds.json")),
+        "at least one bound");
 
     // Minimum greater than maximum.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "count": "${anyNumber:[100:0]}" }
-        """)), "minimum exceeds the maximum");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/min-exceeds-max.json")),
+        "minimum exceeds the maximum");
 
     // String length bounds must be non-negative integers.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "name": "${anyString:[-1:5]}" }
-        """)), "Invalid range bound");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/negative-string-bound.json")),
+        "Invalid range bound");
 
     // Instant ranges use ISO 8601 interval notation (slash), not a colon separator.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "created": "${anyInstant:[2026-01-01T00:00:00Z:2026-12-31T00:00:00Z]}" }
-        """)), "Malformed range");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/instant-colon-separator.json")),
+        "Malformed range");
 
     // Instant bounds must be parseable by Instant.parse.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "created": "${anyInstant:[not-an-instant/2026-12-31T00:00:00Z]}" }
-        """)), "Invalid range bound");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/instant-invalid-bound.json")),
+        "Invalid range bound");
 
     // anyBoolean and anyUUID take no arguments.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "flag": "${anyBoolean:[0:1]}" }
-        """)), "Malformed token");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/boolean-with-range.json")),
+        "Malformed token");
 
     // Parameterized placeholders must be the entire string node.
-    expectAssertionError(() -> asserterFor("{}").equalToFile(writeExpected("""
-        { "label": "count is ${anyNumber:[0:1]} items" }
-        """)), "must be the entire string node");
+    expectAssertionError(() -> asserterFor("{}").equalToFile(fixture("malformed/embedded-parameterized.json")),
+        "must be the entire string node");
   }
 
   @Test
-  public void equalToFile_missingFieldInActualFails() throws IOException {
-    Path file = writeExpected("""
-        { "name": "Jane", "email": "jane@example.com" }
-        """);
-
+  public void equalToFile_missingFieldInActualFails() {
     var asserter = asserterFor("""
         { "name": "Jane" }
         """);
-    expectThrows(AssertionError.class, () -> asserter.equalToFile(file));
+    expectThrows(AssertionError.class, () -> asserter.equalToFile(fixture("name-and-email.json")));
   }
 
   @Test
-  public void equalToFile_nonStringSubstitutionNameThrows() throws IOException {
-    Path file = writeExpected("""
-        { "name": "Jane" }
-        """);
-
+  public void equalToFile_nonStringSubstitutionNameThrows() {
     var asserter = asserterFor("""
         { "name": "Jane" }
         """);
-    expectThrows(IllegalArgumentException.class, () -> asserter.equalToFile(file, 42, "value"));
+    expectThrows(IllegalArgumentException.class, () -> asserter.equalToFile(fixture("name.json"), 42, "value"));
   }
 
   @Test
-  public void equalToFile_objectKeyOrderIgnored() throws IOException {
-    Path file = writeExpected("""
-        { "b": 2, "a": 1, "c": 3 }
-        """);
-
+  public void equalToFile_objectKeyOrderIgnored() {
     asserterFor("""
         { "a": 1, "b": 2, "c": 3 }
-        """).equalToFile(file);
+        """).equalToFile(fixture("object-key-order.json"));
   }
 
   @Test
-  public void equalToFile_oddSubstitutionCountThrows() throws IOException {
-    Path file = writeExpected("""
-        { "name": "Jane" }
-        """);
-
+  public void equalToFile_oddSubstitutionCountThrows() {
     var asserter = asserterFor("""
         { "name": "Jane" }
         """);
-    expectThrows(IllegalArgumentException.class, () -> asserter.equalToFile(file, "lonely"));
+    expectThrows(IllegalArgumentException.class, () -> asserter.equalToFile(fixture("name.json"), "lonely"));
   }
 
   @Test
-  public void equalToFile_placeholderFailsForJSONNull() throws IOException {
-    Path file = writeExpected("""
-        { "id": "${anyString}" }
-        """);
-
+  public void equalToFile_placeholderFailsForJSONNull() {
     var asserter = asserterFor("""
         { "id": null }
         """);
-    expectThrows(AssertionError.class, () -> asserter.equalToFile(file));
+    expectThrows(AssertionError.class, () -> asserter.equalToFile(fixture("any-string-id.json")));
   }
 
   @Test
-  public void equalToFile_placeholderFailsForMissingKey() throws IOException {
-    Path file = writeExpected("""
-        { "id": "${anyString}" }
-        """);
-
+  public void equalToFile_placeholderFailsForMissingKey() {
     var asserter = asserterFor("{}");
-    expectThrows(AssertionError.class, () -> asserter.equalToFile(file));
+    expectThrows(AssertionError.class, () -> asserter.equalToFile(fixture("any-string-id.json")));
   }
 
   @Test
-  public void equalToFile_regexPlaceholder() throws IOException {
-    // The pattern runs to the trailing } of the node, so brace quantifiers are usable. The file must contain the
+  public void equalToFile_regexPlaceholder() {
+    // The pattern runs to the trailing } of the node, so brace quantifiers are usable. The file contains the
     // JSON-escaped form \\d, which the parser turns back into \d.
-    Path file = writeExpected("""
-        { "code": "${regex:[a-z]{3}-\\\\d{3}}" }
-        """);
+    Path file = fixture("regex.json");
 
     asserterFor("""
         { "code": "abc-123" }
@@ -532,15 +463,8 @@ public class JSONBodyAsserterFileTest {
   }
 
   @Test
-  public void equalToFile_substitutionReplacesWholeNodeTyped() throws IOException {
+  public void equalToFile_substitutionReplacesWholeNodeTyped() {
     UUID id = UUID.randomUUID();
-    Path file = writeExpected("""
-        {
-          "active": "${active}",
-          "count": "${count}",
-          "id": "${id}"
-        }
-        """);
 
     // A string node that is exactly one token takes the JSON type of the supplied value.
     asserterFor("""
@@ -549,50 +473,36 @@ public class JSONBodyAsserterFileTest {
           "count": 42,
           "id": "%s"
         }
-        """.formatted(id)).equalToFile(file, "active", true, "count", 42, "id", id);
+        """.formatted(id)).equalToFile(fixture("substitution-typed.json"), "active", true, "count", 42, "id", id);
   }
 
   @Test
-  public void equalToFile_typeMismatchFails() throws IOException {
-    Path file = writeExpected("""
-        { "n": 1 }
-        """);
-
+  public void equalToFile_typeMismatchFails() {
     var asserter = asserterFor("""
         { "n": "1" }
         """);
-    expectThrows(AssertionError.class, () -> asserter.equalToFile(file));
+    expectThrows(AssertionError.class, () -> asserter.equalToFile(fixture("type-mismatch.json")));
   }
 
   @Test
-  public void equalToFile_unknownTokenFails() throws IOException {
-    Path file = writeExpected("""
-        { "id": "${anyGuid}" }
-        """);
-
+  public void equalToFile_unknownTokenFails() {
     var asserter = asserterFor("""
         { "id": "abc" }
         """);
-    expectAssertionError(() -> asserter.equalToFile(file), "anyGuid");
+    expectAssertionError(() -> asserter.equalToFile(fixture("unknown-token.json")), "anyGuid");
   }
 
   @Test
-  public void equalToFile_unusedSubstitutionFails() throws IOException {
-    Path file = writeExpected("""
-        { "name": "Jane" }
-        """);
-
+  public void equalToFile_unusedSubstitutionFails() {
     var asserter = asserterFor("""
         { "name": "Jane" }
         """);
-    expectAssertionError(() -> asserter.equalToFile(file, "orphan", 1), "orphan");
+    expectAssertionError(() -> asserter.equalToFile(fixture("name.json"), "orphan", 1), "orphan");
   }
 
   @Test
   public void equalToFile_updateModeOnCIFailsWithoutWriting() throws IOException {
-    Path file = writeExpected("""
-        { "version": "0.9.0" }
-        """);
+    Path file = scratchCopy("update-mode-ci.json");
     String before = Files.readString(file);
     var asserter = ciAsserterFor("""
         { "version": "1.0.0" }
@@ -611,14 +521,7 @@ public class JSONBodyAsserterFileTest {
   @Test
   public void equalToFile_updateModeRewritesFilePreservingTokens() throws IOException {
     UUID id = UUID.randomUUID();
-    Path file = writeExpected("""
-        {
-          "created": "${anyInstant}",
-          "id": "${id}",
-          "url": "http://localhost:${port}/",
-          "version": "0.9.0"
-        }
-        """);
+    Path file = scratchCopy("update-mode.json");
     var asserter = asserterFor("""
         {
           "created": "2026-08-14T12:00:00Z",
@@ -645,15 +548,13 @@ public class JSONBodyAsserterFileTest {
     assertFalse(content.contains("0.9.0"), "Stale value must no longer appear in the rewritten file");
   }
 
+  /**
+   * Starts each test with an empty scratch directory so generated files never exist beforehand.
+   */
   @BeforeMethod
   public void setUp() throws IOException {
-    tempDir = Files.createTempDirectory("latte-json-golden-test");
-  }
-
-  @AfterMethod
-  public void tearDown() throws IOException {
-    if (tempDir != null && Files.exists(tempDir)) {
-      try (var stream = Files.walk(tempDir)) {
+    if (Files.exists(SCRATCH_DIR)) {
+      try (var stream = Files.walk(SCRATCH_DIR)) {
         stream.sorted(Comparator.reverseOrder()).forEach(path -> {
           try {
             Files.delete(path);
@@ -662,6 +563,7 @@ public class JSONBodyAsserterFileTest {
         });
       }
     }
+    Files.createDirectories(SCRATCH_DIR);
   }
 
   private JSONBodyAsserter asserterFor(String json) {
@@ -676,19 +578,13 @@ public class JSONBodyAsserterFileTest {
     return asserter;
   }
 
-  private AssertionError expectAssertionError(ThrowingRunnable runnable, String expectedMessageFragment) {
+  private void expectAssertionError(ThrowingRunnable runnable, String expectedMessageFragment) {
     AssertionError error = expectThrows(AssertionError.class, runnable);
     assertNotNull(error.getMessage(), "AssertionError message must not be null");
-    assertTrue(error.getMessage().contains(expectedMessageFragment),
-        "AssertionError message [" + error.getMessage() + "] does not contain expected fragment ["
-            + expectedMessageFragment + "]");
-    return error;
-  }
-
-  private Path writeExpected(String json) throws IOException {
-    Path file = tempDir.resolve("expected.json");
-    Files.writeString(file, json);
-    return file;
+    assertTrue(
+        error.getMessage().contains(expectedMessageFragment),
+        "AssertionError message [" + error.getMessage() + "] does not contain expected fragment [" + expectedMessageFragment + "]"
+    );
   }
 
   private static class CIAsserter extends JSONBodyAsserter {

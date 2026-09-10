@@ -146,8 +146,8 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Returns a middleware that resolves an instance of the given type from the injector on each request and delegates
-   * to it.
+   * Returns a middleware that resolves an instance of the given type from the injector on each request and delegates to
+   * it.
    *
    * @param type The middleware type.
    * @return The delegating middleware.

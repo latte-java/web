@@ -12,18 +12,19 @@ import org.lattejava.web.Configuration;
 
 import static org.testng.Assert.*;
 
+/**
+ * Tests the Configuration class against the properties files under {@code src/test/projects/configuration}.
+ */
 public class ConfigurationTest {
+  private static final Path PROJECT_DIR = Paths.get("src/test/projects/configuration");
+  private static final Path APP = PROJECT_DIR.resolve("app.properties");
+  private static final Path FIRST = PROJECT_DIR.resolve("first.properties");
+  private static final Path SECOND = PROJECT_DIR.resolve("second.properties");
 
   @Test
-  public void constructorWithFileAndRequiredSettings() throws Exception {
-    Path file = Files.createTempFile("config-test", ".properties");
-    try {
-      Files.writeString(file, "config-test.required.in-file=ok\n");
-      var config = new Configuration(List.of("config-test.required.in-file"), file);
-      assertEquals(config.get("config-test.required.in-file"), "ok");
-    } finally {
-      Files.deleteIfExists(file);
-    }
+  public void constructorWithFileAndRequiredSettings() {
+    var config = new Configuration(List.of("config-test.required.in-file"), APP);
+    assertEquals(config.get("config-test.required.in-file"), "ok");
   }
 
   @Test
@@ -56,24 +57,18 @@ public class ConfigurationTest {
 
   @Test
   public void constructorIgnoresNonExistentFile() {
-    Path missing = Path.of("does-not-exist-" + ConfigurationTest.class.getName() + ".properties");
+    Path missing = PROJECT_DIR.resolve("does-not-exist.properties");
     assertFalse(Files.exists(missing), "Test assumes the file does not exist");
     var config = new Configuration(missing);
     assertNull(config.get("config-test.missing.from-absent-file"));
   }
 
   @Test
-  public void constructorReadsExistingFileAroundNonExistentFile() throws Exception {
-    Path missing = Path.of("does-not-exist-around-" + ConfigurationTest.class.getName() + ".properties");
-    Path present = Files.createTempFile("config-test-present", ".properties");
+  public void constructorReadsExistingFileAroundNonExistentFile() {
+    Path missing = PROJECT_DIR.resolve("does-not-exist.properties");
     assertFalse(Files.exists(missing), "Test assumes the file does not exist");
-    try {
-      Files.writeString(present, "config-test.present.value=here\n");
-      var config = new Configuration(missing, present);
-      assertEquals(config.get("config-test.present.value"), "here");
-    } finally {
-      Files.deleteIfExists(present);
-    }
+    var config = new Configuration(missing, APP);
+    assertEquals(config.get("config-test.present.value"), "here");
   }
 
   @Test
@@ -204,46 +199,22 @@ public class ConfigurationTest {
   }
 
   @Test
-  public void getReadsFromMultipleFilesEarlierWins() throws Exception {
-    Path first = Files.createTempFile("config-test-first", ".properties");
-    Path second = Files.createTempFile("config-test-second", ".properties");
-    try {
-      Files.writeString(first, "config-test.multi.shared=from-first\n");
-      Files.writeString(second, "config-test.multi.shared=from-second\n");
-      var config = new Configuration(first, second);
-      assertEquals(config.get("config-test.multi.shared"), "from-first");
-    } finally {
-      Files.deleteIfExists(first);
-      Files.deleteIfExists(second);
-    }
+  public void getReadsFromMultipleFilesEarlierWins() {
+    var config = new Configuration(FIRST, SECOND);
+    assertEquals(config.get("config-test.multi.shared"), "from-first");
   }
 
   @Test
-  public void getReadsFromMultipleFilesFallsThroughToLater() throws Exception {
-    Path first = Files.createTempFile("config-test-first", ".properties");
-    Path second = Files.createTempFile("config-test-second", ".properties");
-    try {
-      Files.writeString(first, "config-test.multi.only-first=from-first\n");
-      Files.writeString(second, "config-test.multi.only-second=from-second\n");
-      var config = new Configuration(first, second);
-      assertEquals(config.get("config-test.multi.only-first"), "from-first");
-      assertEquals(config.get("config-test.multi.only-second"), "from-second");
-    } finally {
-      Files.deleteIfExists(first);
-      Files.deleteIfExists(second);
-    }
+  public void getReadsFromMultipleFilesFallsThroughToLater() {
+    var config = new Configuration(FIRST, SECOND);
+    assertEquals(config.get("config-test.multi.only-first"), "from-first");
+    assertEquals(config.get("config-test.multi.only-second"), "from-second");
   }
 
   @Test
-  public void getReadsFromPropertiesFile() throws Exception {
-    Path file = Files.createTempFile("config-test", ".properties");
-    try {
-      Files.writeString(file, "my-app.some-setting=from-file\n");
-      var config = new Configuration(file);
-      assertEquals(config.get("my-app.some-setting"), "from-file");
-    } finally {
-      Files.deleteIfExists(file);
-    }
+  public void getReadsFromPropertiesFile() {
+    var config = new Configuration(APP);
+    assertEquals(config.get("my-app.some-setting"), "from-file");
   }
 
   @Test
@@ -271,17 +242,14 @@ public class ConfigurationTest {
   }
 
   @Test
-  public void getSystemPropertyOverridesFile() throws Exception {
+  public void getSystemPropertyOverridesFile() {
     String key = "config-test.precedence-sysprop-vs-file";
-    Path file = Files.createTempFile("config-test", ".properties");
+    System.setProperty(key, "from-sysprop");
     try {
-      Files.writeString(file, key + "=from-file\n");
-      System.setProperty(key, "from-sysprop");
-      var config = new Configuration(file);
+      var config = new Configuration(APP);
       assertEquals(config.get(key), "from-sysprop");
     } finally {
       System.clearProperty(key);
-      Files.deleteIfExists(file);
     }
   }
 }
