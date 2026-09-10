@@ -16,18 +16,17 @@ import org.lattejava.web.internal.*;
  * @author Brian Pontarelli
  */
 @SuppressWarnings("UnusedReturnValue")
-public class Web implements AutoCloseable {
+public class Web implements AutoCloseable, Configurable<Web> {
   private static final System.Logger LOG = System.getLogger(Web.class.getName());
   private final boolean isChild;
   private final MiddlewareTrie middlewareTrie;
   private final String pathPrefix;
+  private final HTTPServer server = new HTTPServer();
   private final List<Runnable> shutdownTasks = new ArrayList<>();
   private final AtomicBoolean started;
   private final RouteTrie trie;
-  private Path baseDir;
   private Injector injector;
   private Handler missingHandler;
-  private HTTPServer server;
   private Thread shutdownHook;
 
   public Web() {
@@ -72,9 +71,7 @@ public class Web implements AutoCloseable {
     if (started.get()) {
       throw new IllegalStateException("Cannot set baseDir after Web has been started");
     }
-    Objects.requireNonNull(baseDir, "baseDir must not be null");
-    this.baseDir = baseDir;
-    return this;
+    return withBaseDir(baseDir);
   }
 
   /**
@@ -97,6 +94,11 @@ public class Web implements AutoCloseable {
     }
 
     closeServer();
+  }
+
+  @Override
+  public HTTPServerConfiguration configuration() {
+    return server.configuration();
   }
 
   /**
@@ -466,27 +468,24 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Starts the HTTP server using the given listener configurations. Route and middleware registration is locked once
-   * the server starts.
+   * Starts the HTTP server.
    *
-   * @param listeners The listener configurations.
    * @return This Web instance for chaining.
    * @throws IllegalStateException if called on a prefix child Web, or if the server has already been started.
    */
-  public Web start(HTTPListenerConfiguration... listeners) {
+  public Web start() {
     if (isChild) {
       throw new IllegalStateException("Cannot call start on a prefix child Web instance");
     }
     if (started.get()) {
       throw new IllegalStateException("Web has already been started");
     }
-    Objects.requireNonNull(listeners, "listeners must not be null");
+    if (server.configuration().getListeners().isEmpty()) {
+      throw new IllegalStateException("No listeners are configured");
+    }
 
-    HTTPServer newServer = new HTTPServer()
-        .withHandler(this::handleRequest)
-        .withListeners(listeners)
-        .withBaseDir(baseDir != null ? baseDir : Path.of(".")) // Default to current working directory
-        .start();
+    server.withHandler(this::handleRequest)
+          .start();
 
     Thread hook;
     try {
@@ -494,15 +493,16 @@ public class Web implements AutoCloseable {
       Runtime.getRuntime().addShutdownHook(hook);
     } catch (IllegalStateException e) {
       // JVM is already shutting down; clean up the server we just started
-      newServer.close();
+      server.close();
       throw e;
     }
 
-    server = newServer;
     shutdownHook = hook;
     started.set(true);
 
-    var urls = Arrays.stream(listeners)
+    var urls = server.configuration()
+                     .getListeners()
+                     .stream()
                      .map(WebTools::buildURL)
                      .collect(Collectors.joining(", "));
     LOG.log(System.Logger.Level.INFO, "Web application is available at [{0}]", urls);
@@ -515,19 +515,15 @@ public class Web implements AutoCloseable {
    * @param port The port to listen on.
    * @return This Web instance for chaining.
    * @throws IllegalStateException if called on a prefix child Web, or if the server has already been started.
-   * @see #start(HTTPListenerConfiguration...)
    */
   public Web start(int port) {
-    return start(new HTTPListenerConfiguration(port));
+    server.withListener(new HTTPListenerConfiguration(port));
+    return start();
   }
 
   private void closeServer() {
     // HTTPServer.close() is idempotent, so the rare close()/shutdown-hook race is harmless.
-    HTTPServer toClose = server;
-    if (toClose != null) {
-      server = null;
-      toClose.close();
-    }
+    server.close();
 
     // Run the shutdown tasks
     for (Runnable shutdownTask : shutdownTasks) {
