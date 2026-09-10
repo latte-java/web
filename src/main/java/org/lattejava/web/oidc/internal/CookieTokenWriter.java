@@ -9,8 +9,9 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * Writes OIDC tokens to HTTP cookies and clears them on authentication failure. Cookie policy: id and access tokens use
- * SameSite=Lax; refresh token uses SameSite=Strict (the default) with the configured max-age.
+ * Writes OIDC tokens to HTTP cookies and clears them on authentication failure. Cookie policy: the id and access tokens
+ * use SameSite=Lax and expire with the access token (one hour when the expiry is unknown); the refresh token uses
+ * SameSite=Strict (the default) with the configured max-age. Only the id token cookie is readable by scripts.
  *
  * @author Brian Pontarelli
  */

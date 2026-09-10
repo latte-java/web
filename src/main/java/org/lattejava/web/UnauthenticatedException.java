@@ -5,9 +5,8 @@
 package org.lattejava.web;
 
 /**
- * An {@link HTTPException} that maps to {@code 401 Unauthorized}. Thrown when a request lacks valid authentication —
- * for example, when code attempts to access the request-scoped authenticated identity but no identity is bound, or when
- * an API request carries a missing/invalid token that cannot be refreshed.
+ * An {@link HTTPException} that maps to {@code 401 Unauthorized}. Thrown when a request lacks valid authentication, for
+ * example when {@link org.lattejava.web.oidc.OIDC#jwt()} is called and no JWT is bound to the current request.
  *
  * @author Brian Pontarelli
  */

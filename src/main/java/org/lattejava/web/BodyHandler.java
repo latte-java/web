@@ -19,7 +19,7 @@ public interface BodyHandler<T> {
    *
    * @param req  The request.
    * @param res  The response.
-   * @param body The parsed body, or {@code null} if the {@link BodySupplier} signalled an empty (but valid) body. The
+   * @param body The parsed body, or {@code null} if the {@link BodySupplier} signaled an empty (but valid) body. The
    *             handler decides whether a {@code null} body is acceptable.
    */
   void handle(HTTPRequest req, HTTPResponse res, T body) throws Exception;

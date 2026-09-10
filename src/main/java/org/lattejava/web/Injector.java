@@ -5,7 +5,7 @@
 package org.lattejava.web;
 
 /**
- * Resolves handler instances by type. Any dependency injection library can supply this (e.g. Avaje's
+ * Resolves instances by type. Any dependency injection library can supply this (e.g. Avaje's
  * {@code BeanScope::get}).
  *
  * @author Brian Pontarelli

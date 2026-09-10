@@ -20,10 +20,10 @@ import module org.lattejava.web;
  *   <li>Any other request (a redirect with any method, or a non-GET with any status) carries the messages forward. If
  *       the handler changed the request's cookie through {@link Flash}, the new value is written; if it removed the
  *       cookie, the browser's cookie is cleared; otherwise no {@code Set-Cookie} header is sent.</li>
- *   <li>If the handler throws, the cookie is left exactly as the browser sent it.</li>
+ *   <li>If the handler throws before the response is committed, the cookie is left as the browser sent it.</li>
  * </ul>
  * Because cookie headers must be in place before the handler commits the response body, the clear for a GET is staged
- * before the handler runs and withdrawn afterward if the handler turned out to redirect. A handler that commits the
+ * before the handler runs and withdrawn afterward if the handler redirected. A handler that commits the
  * response by writing a body therefore ends with whatever was staged: a consuming GET has its cookie cleared, and a
  * non-GET keeps the cookie the browser sent, so changes made before rendering a body are visible to that request's
  * templates but are not carried forward. Add messages before redirecting to carry them to the next page.

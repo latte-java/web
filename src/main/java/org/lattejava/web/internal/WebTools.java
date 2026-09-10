@@ -11,7 +11,7 @@ import java.util.*;
 import org.lattejava.http.server.*;
 
 /**
- * Some web tools and stuff.
+ * Static helpers for building listener URLs and validating HTTP method tokens.
  *
  * @author Brian Pontarelli
  */

@@ -7,12 +7,9 @@ package org.lattejava.web;
 import module org.lattejava.http;
 
 /**
- * A middleware intercepts requests in the pipeline. It can:
- * <ul>
- *   <li>Inspect or modify the request or response</li>
- *   <li>Short-circuit by NOT calling {@link MiddlewareChain#next} (e.g., return a 401)</li>
- *   <li>Pass control downstream by calling {@link MiddlewareChain#next}</li>
- * </ul>
+ * Intercepts requests in the pipeline. A middleware can inspect or modify the request and response, pass control
+ * downstream by calling {@link MiddlewareChain#next}, or short-circuit by not calling it (for example, to return a
+ * 401).
  *
  * @author Brian Pontarelli
  */

@@ -13,8 +13,9 @@ import module org.lattejava.http;
  * Renders <a href="https://jte.gg/">JTE</a> templates, either by writing the result to the HTTP response or by
  * returning it as a {@link String}.
  * <p>
- * Each {@code html} method resolves a template, evaluates it with the supplied parameters, and writes the rendered HTML
- * to the response. The template name can be supplied explicitly or derived from the request path:
+ * Each {@code html} method resolves a template, evaluates it with the supplied parameters plus the {@code request} and
+ * {@code response}, sets the content type to {@code text/html; charset=utf-8}, and writes the rendered HTML to the
+ * response. The template name can be supplied explicitly or derived from the request path:
  * <ul>
  *   <li>{@code /} resolves to {@code index.jte}</li>
  *   <li>{@code /foo} resolves to {@code foo.jte}</li>
@@ -50,7 +51,8 @@ public class JTETemplates {
   }
 
   /**
-   * Constructs a {@code JTETemplates} that loads templates from the given directory and renders them as HTML.
+   * Constructs a {@code JTETemplates} that loads templates from the given directory and renders them as HTML. Compiled
+   * templates are stored in {@code build/jte-classes}.
    *
    * @param templateDir The directory containing {@code .jte} template sources.
    */
@@ -95,10 +97,13 @@ public class JTETemplates {
   }
 
   /**
-   * Renders the template derived from the request path with no parameters and writes the result to the response.
+   * Renders the template derived from the request path with no model and writes the result to the response. The
+   * {@code request} and {@code response} parameters are always available to the template.
    *
-   * @param req The request, used to derive the template name.
-   * @param res The response to write the rendered HTML to.
+   * @param req The request, used to derive the template name and exposed to the template as the {@code request}
+   *            parameter.
+   * @param res The response to write the rendered HTML to, exposed to the template as the {@code response} parameter.
+   * @throws IOException if the response cannot be written.
    */
   public void html(HTTPRequest req, HTTPResponse res) throws IOException {
     renderToResponse(deriveTemplateName(req), req, res, Map.of());
@@ -113,7 +118,8 @@ public class JTETemplates {
    *              parameter.
    * @param res   The response to write the rendered HTML to, exposed to the template as the {@code response}
    *              parameter.
-   * @param model The model to bind.
+   * @param model The model to bind to the {@code model} parameter.
+   * @throws IOException if the response cannot be written.
    */
   public void html(HTTPRequest req, HTTPResponse res, Object model) throws IOException {
     renderToResponse(deriveTemplateName(req), req, res, Map.of(DEFAULT_MODEL_NAME, model));
@@ -127,7 +133,8 @@ public class JTETemplates {
    *               parameter.
    * @param res    The response to write the rendered HTML to, exposed to the template as the {@code response}
    *               parameter.
-   * @param models The map of models to bind.
+   * @param models The map of template parameter names to values.
+   * @throws IOException if the response cannot be written.
    */
   public void html(HTTPRequest req, HTTPResponse res, Map<String, Object> models) throws IOException {
     renderToResponse(deriveTemplateName(req), req, res, models);
@@ -143,6 +150,7 @@ public class JTETemplates {
    * @param res    The response to write the rendered HTML to, exposed to the template as the {@code response}
    *               parameter.
    * @param models The map of template parameter names to values.
+   * @throws IOException if the response cannot be written.
    */
   public void html(String name, HTTPRequest req, HTTPResponse res, Map<String, Object> models) throws IOException {
     renderToResponse(name, req, res, models);
@@ -158,6 +166,7 @@ public class JTETemplates {
    * @param res   The response to write the rendered HTML to, exposed to the template as the {@code response}
    *              parameter.
    * @param model The model to bind to the {@code model} parameter.
+   * @throws IOException if the response cannot be written.
    */
   public void html(String name, HTTPRequest req, HTTPResponse res, Object model) throws IOException {
     renderToResponse(name, req, res, Map.of(DEFAULT_MODEL_NAME, model));

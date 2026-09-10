@@ -8,8 +8,8 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * Reads OIDC tokens from HTTP cookies. The three cookie names are supplied at construction time so this reader can be
- * shared across profiles with different cookie-name conventions.
+ * Reads OIDC tokens from HTTP cookies. The cookie names default to those of {@link CookieTokenWriter} and can be
+ * overridden at construction time.
  *
  * @author Brian Pontarelli
  */

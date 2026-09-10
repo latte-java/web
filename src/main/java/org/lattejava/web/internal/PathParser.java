@@ -14,11 +14,11 @@ import module java.base;
  */
 public class PathParser {
   /**
-   * Splits a literal path (request URL path or a route-registration prefix) into its segments using a single
-   * {@code indexOf('/')} pass. Does not validate characters or interpret {@code {name}} parameter syntax — use
+   * Splits a literal path (a request path or a route-registration prefix) into its segments with a single
+   * {@code indexOf('/')} pass. Does not validate characters or interpret {@code {name}} parameter syntax; use
    * {@link #parseWithParameters(String)} for that.
    * <p>
-   * Semantics match the prior {@code path.split("/", -1)} with the leading empty dropped:
+   * The result matches {@code path.split("/", -1)} with the leading empty string dropped:
    * <ul>
    *   <li>{@code ""} returns an empty list.</li>
    *   <li>{@code "/"} returns a list containing a single empty string.</li>
@@ -27,8 +27,8 @@ public class PathParser {
    *   <li>{@code "/a/b"} returns {@code ["a", "b"]}.</li>
    * </ul>
    *
-   * @param path the path to split.
-   * @return a mutable {@code ArrayList<String>} of segments; callers wrap for immutability if needed.
+   * @param path The path to split.
+   * @return A mutable list of segments. Callers wrap it for immutability if needed.
    */
   public static List<String> parsePath(String path) {
     Objects.requireNonNull(path, "path must not be null");
@@ -59,12 +59,12 @@ public class PathParser {
   }
 
   /**
-   * Validates and parses the given path specification into a list of segments. Segments might be literals or
-   * parameters, depending on the String. Parameters are denoted by curly braces.
+   * Validates the given path specification and parses it into literal and parameter segments. Parameters are denoted
+   * by curly braces.
    *
-   * @param pathSpec the path specification to parse (e.g., {@code /api/users/{id}})
-   * @return a list of {@link Segment} objects representing each path segment
-   * @throws IllegalArgumentException if the path specification is invalid
+   * @param pathSpec The path specification to parse (e.g., {@code /api/users/{id}}).
+   * @return The segments, one per path segment.
+   * @throws IllegalArgumentException if the path specification is invalid.
    */
   public static List<Segment> parseWithParameters(String pathSpec) {
     Objects.requireNonNull(pathSpec, "pathSpec must not be null");

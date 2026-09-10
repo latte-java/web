@@ -26,7 +26,7 @@ public final class CookieJar {
   }
 
   /**
-   * Replaces or inserts a cookie keyed by name.
+   * Replaces or inserts a cookie keyed by name. A {@code null} cookie or a cookie without a name is ignored.
    *
    * @param cookie The cookie to add.
    */
@@ -55,10 +55,9 @@ public final class CookieJar {
   }
 
   /**
-   * Builds a {@code Cookie} request header value from the current jar contents, omitting expired cookies. Returns
-   * {@code null} if there are no cookies to send.
+   * Builds a {@code Cookie} request header value from the current jar contents, omitting expired cookies.
    *
-   * @return The request header value, or {@code null} if the jar is empty.
+   * @return The request header value, or {@code null} if the jar holds no unexpired cookies.
    */
   public String toRequestHeader() {
     if (cookies.isEmpty()) {
@@ -77,7 +76,8 @@ public final class CookieJar {
   }
 
   /**
-   * Parses every {@code Set-Cookie} header in the response and updates the jar.
+   * Parses every {@code Set-Cookie} header in the response and updates the jar. A cookie with a {@code Max-Age} of zero
+   * or less, or an {@code Expires} in the past, is removed from the jar.
    *
    * @param response The response whose {@code Set-Cookie} headers should be applied.
    */

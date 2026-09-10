@@ -10,8 +10,8 @@ import module java.base;
  * Loads and caches the properties files under a messages directory. Each file is read on first use and kept until it
  * changes on disk. Every lookup checks the file's last-modified time and size, and a file whose stamp differs from the
  * cached one is read again, so an edit, a new file, or a deleted file is picked up on the next lookup without a
- * restart. Missing files are remembered as missing until they appear. One store lives in each {@code HTTPContext}, so
- * the cache is shared by every request the server handles.
+ * restart. Missing files are remembered as missing until they appear. {@code Messages} keeps one store in each
+ * {@code HTTPContext}, so the cache is shared by every request the server handles.
  *
  * @author Brian Pontarelli
  */
@@ -74,6 +74,7 @@ public final class MessageStore {
   /**
    * Reads the file's current stamp with a single attribute lookup.
    *
+   * @param file The file.
    * @return The stamp, or {@code null} if the file does not exist or is not a regular file.
    */
   private static Stamp stamp(Path file) {

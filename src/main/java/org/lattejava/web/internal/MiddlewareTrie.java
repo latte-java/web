@@ -8,11 +8,11 @@ import module java.base;
 import module org.lattejava.web;
 
 /**
- * A literal-segment trie that maps path prefixes to middlewares. Installation appends to a node's middleware list;
- * collection walks from root along a request's segments, accumulating middlewares at each node visited. This yields
- * outer-to-inner ordering implicitly and {@code O(depth)} lookup per request, with no sort and no entry-set scan.
+ * A literal-segment trie that maps path prefixes to middlewares. Installing appends to a node's middleware list, and
+ * collecting walks from the root along a request's segments, accumulating the middlewares at each node visited. This
+ * yields outer-to-inner order and {@code O(depth)} lookup per request.
  * <p>
- * Prefixes are treated as literal segments only — no {@code {name}} parameter support, which matches how
+ * Prefixes are literal segments only. There is no {@code {name}} parameter support, which matches how
  * {@link org.lattejava.web.Web#install(Middleware...)} scoping is defined.
  *
  * @author Brian Pontarelli
@@ -56,7 +56,7 @@ public class MiddlewareTrie {
 
   /**
    * Installs middlewares at the given path prefix. The prefix is parsed via {@link PathParser#parsePath(String)}; an
-   * empty or root-equivalent prefix installs at the root.
+   * empty prefix installs at the root.
    *
    * @param pathPrefix  The path prefix (e.g., {@code ""}, {@code "/api"}, {@code "/api/v1"}).
    * @param middlewares The middlewares to append at that prefix, in order.

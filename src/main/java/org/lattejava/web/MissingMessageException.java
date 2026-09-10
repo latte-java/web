@@ -7,9 +7,9 @@ package org.lattejava.web;
 import module java.base;
 
 /**
- * Thrown by {@link Messages#get(String, Object...)} when no message file in the request's lookup chain defines the
- * key. This is a plain {@link RuntimeException} rather than an {@link HTTPException} so that the key and path are not
- * written to the client by the default error renderer.
+ * Thrown by {@link Messages#get(String, Object...)} when no file in the lookup chain defines the key. This is a plain
+ * {@link RuntimeException} rather than an {@link HTTPException} so that the key and path are not written to the client
+ * by the default error renderer.
  *
  * @author Brian Pontarelli
  */

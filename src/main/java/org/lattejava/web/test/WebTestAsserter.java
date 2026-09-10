@@ -28,12 +28,11 @@ public class WebTestAsserter {
   }
 
   /**
-   * Asserts the response body using the given asserter. The body is fed into the asserter and the consumer is invoked
-   * to perform individual assertions.
+   * Feeds the response body into the given asserter and passes it to the consumer, which performs the assertions.
    *
+   * @param <T>          The asserter type.
    * @param bodyAsserter The asserter to populate.
    * @param consumer     The consumer that performs assertions on the populated asserter.
-   * @param <T>          The asserter type.
    * @return This asserter for chaining.
    */
   public <T extends BodyAsserter> WebTestAsserter assertBodyAs(T bodyAsserter, Consumer<T> consumer) {
@@ -43,7 +42,8 @@ public class WebTestAsserter {
   }
 
   /**
-   * Asserts that the response carries a cookie with the given name and value.
+   * Asserts that the cookie jar, after applying this response's {@code Set-Cookie} headers, holds a cookie with the
+   * given name and value.
    *
    * @param name  The cookie name.
    * @param value The expected cookie value.
@@ -100,9 +100,9 @@ public class WebTestAsserter {
   }
 
   /**
-   * Asserts whatever the lambda wants.
+   * Passes the response to the given consumer so the caller can make arbitrary assertions.
    *
-   * @param asserter The lambda.
+   * @param asserter The consumer that performs the assertions.
    * @return This asserter for chaining.
    */
   public WebTestAsserter assertResponse(Consumer<HttpResponse<byte[]>> asserter) {

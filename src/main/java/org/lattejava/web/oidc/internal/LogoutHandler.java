@@ -9,8 +9,9 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * Handles the logout path for the app. If there is an OIDC logout endpoint, this redirects to it. Otherwise, it clears
- * the cookies and redirects to the configured post-logout landing page.
+ * Handles the logout path. If the IdP has a logout endpoint, this redirects to it (using a meta refresh for POST
+ * requests so a strict CSP does not block the redirect). Otherwise, it clears the tokens and session cookies and
+ * redirects to the post-logout page.
  *
  * @author Brian Pontarelli
  */

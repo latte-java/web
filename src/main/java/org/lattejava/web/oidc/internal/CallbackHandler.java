@@ -10,8 +10,10 @@ import module org.lattejava.jwt;
 import module org.lattejava.web;
 
 /**
- * Handles the callback from the OIDC provider after the authorization code grant has completed and the IDP redirects
- * back to the app.
+ * Handles the IdP's redirect back to the app after the authorization code grant. Checks the state, exchanges the code
+ * using the state as the PKCE verifier, verifies the returned tokens, writes them through the token writer, and
+ * redirects to the return-to URL or the post-login page. Any failure clears credentials and redirects to the error page
+ * with {@code oidc_error} and {@code oidc_error_description} query parameters.
  *
  * @author Brian Pontarelli
  */

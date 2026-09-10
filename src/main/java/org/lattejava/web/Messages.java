@@ -18,6 +18,7 @@ import org.lattejava.web.internal.*;
  * directory's index. Files are consulted from the most specific to the least specific, and the first one that defines a
  * key wins:
  * <table>
+ *   <caption>Lookup order by request path</caption>
  *   <tr><th>Request path</th><th>Files consulted, in order</th></tr>
  *   <tr><td>{@code /}</td><td>{@code index}</td></tr>
  *   <tr><td>{@code /users}</td><td>{@code users}, {@code index}</td></tr>
@@ -89,6 +90,7 @@ public final class Messages {
    * Wraps the messages for the given request using the request's preferred locale.
    *
    * @param req The current request.
+   * @throws IllegalStateException if the request has no {@link HTTPContext}.
    */
   public Messages(HTTPRequest req) {
     Objects.requireNonNull(req, "req must not be null");
@@ -100,6 +102,7 @@ public final class Messages {
    *
    * @param req    The current request.
    * @param locale The locale to look up messages for.
+   * @throws IllegalStateException if the request has no {@link HTTPContext}.
    */
   public Messages(HTTPRequest req, Locale locale) {
     Objects.requireNonNull(req, "req must not be null");

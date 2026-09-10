@@ -15,9 +15,9 @@ import module org.lattejava.web;
  * Rendering is resolved in two steps. First, the middleware walks the caught exception's class hierarchy (most specific
  * to most general) looking for a registered per-type {@link ErrorRenderer}; if one matches, it renders the response.
  * Otherwise, if the exception is an {@link HTTPException}, the
- * {@linkplain #ExceptionHandler(ErrorRenderer) default renderer} handles it (reading the carried status and writing the
- * message). Any other exception is re-thrown so the HTTP server's default handling (typically a 500) applies — this
- * keeps unexpected exceptions visible rather than masking them behind a generic error body.
+ * {@linkplain #ExceptionHandler(ErrorRenderer) default renderer} handles it. Any other exception is re-thrown so the
+ * HTTP server's default handling (typically a 500) applies, which keeps unexpected exceptions visible rather than
+ * masking them behind a generic error body.
  * <p>
  * Each {@link ErrorRenderer} owns the entire response for its exception: it sets the status and writes the body. To
  * catch every exception (including non-{@code HTTPException} types), register a renderer against {@link Exception} or
@@ -28,11 +28,9 @@ import module org.lattejava.web;
 public class ExceptionHandler implements Middleware {
   /**
    * The default renderer used for any {@link HTTPException} that has no more-specific renderer. It sets the status from
-   * {@link HTTPException#status()} and, when the exception has a message, writes it as the response body. For any other
-   * exception it sets a {@code 500} status.
-   * <p>
-   * This always writes the error out as JSON with the simple name of the exception under the key "error" and the
-   * exception messages under the key "message".
+   * {@link HTTPException#status()} (or {@code 500} for any other exception) and, when the exception has a message,
+   * writes a JSON body with the exception's simple class name under {@code error} and the message under
+   * {@code message}. An exception without a message produces an empty body.
    */
   public static final ErrorRenderer DEFAULT_RENDERER = (_, res, e) -> {
     int status = (e instanceof HTTPException he) ? he.status() : 500;

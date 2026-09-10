@@ -4,7 +4,8 @@ import org.lattejava.http.server.*;
 import org.lattejava.web.*;
 
 /**
- * This middleware takes a path prefix and only applies the given Middleware if the path matches the prefix.
+ * Runs the wrapped middleware only for requests whose path starts with the given prefix. Other requests go straight to
+ * the next middleware in the chain.
  *
  * @author Brian Pontarelli
  */

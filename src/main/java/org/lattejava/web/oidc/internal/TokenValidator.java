@@ -14,7 +14,7 @@ import org.lattejava.web.oidc.internal.internal.*;
 
 /**
  * Validates OIDC access tokens. Performs local JWT verification against the JWKS when
- * {@link org.lattejava.web.oidc.OIDCConfig#validateAccessToken()} is {@code true}, and RFC 7662 introspection for
+ * {@link OIDCConfig#validateAccessToken()} is {@code true}, and RFC 7662 introspection for
  * opaque tokens when it is {@code false}. Both paths require the {@code aud} claim to contain the configured client
  * id.
  *
@@ -30,15 +30,15 @@ public class TokenValidator {
   }
 
   /**
-   * Validates a token against the IdP's RFC 7662 introspection endpoint. Used uniformly when
+   * Validates a token against the IdP's RFC 7662 introspection endpoint. Used when
    * {@link OIDCConfig#validateAccessToken()} is {@code false} (the token is opaque and cannot be decoded locally). The
    * {@link IntrospectionResult.Active} result carries a {@link JWT} built from the introspection response claims, which
    * is the token's only claims source in this mode.
    *
    * @param token The token to introspect.
    * @return {@link IntrospectionResult.Active} (carrying the response claims) when the IdP reports {@code active=true};
-   *     {@link IntrospectionResult.Inactive} when it reports inactive or returns a non-5xx error;
-   *     {@link IntrospectionResult.NetworkError} on a 5xx response or a thrown exception.
+   *     {@link IntrospectionResult.Inactive} when it reports {@code active=false} or returns any other non-200,
+   *     non-5xx response; {@link IntrospectionResult.NetworkError} on a 5xx response or a thrown exception.
    */
   public IntrospectionResult introspect(String token) {
     try {

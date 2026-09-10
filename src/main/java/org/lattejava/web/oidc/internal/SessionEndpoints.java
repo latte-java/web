@@ -9,7 +9,7 @@ import module org.lattejava.jwt;
 import module org.lattejava.web;
 
 /**
- * System middleware that handles the browser login flow paths — login, callback, logout, and logout-return — derived
+ * Middleware that handles the browser login flow paths — login, callback, logout, and logout-return — derived
  * from {@link BrowserSettings}. Any other path passes through to the chain. Install once per browser client; API-only
  * clients never install it.
  *

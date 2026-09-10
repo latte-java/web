@@ -14,8 +14,8 @@ import org.lattejava.web.oidc.BrowserSettings;
 import org.lattejava.web.oidc.internal.*;
 
 /**
- * Test fixture for driving Open ID Connect login and logout against a real provider so that tests can run against a
- * running {@link Web} application with an authenticated user (or not).
+ * Test fixture that logs a user in and out against a real OpenID Connect provider so tests can drive a running
+ * {@link Web} application as an authenticated user.
  * <p>
  * The fixture walks the OAuth2 authorization-code flow against {@link OIDCConfig#authorizeEndpoint()} as a browser
  * would, exchanges the resulting code at {@link OIDCConfig#tokenEndpoint()}, and stores the issued tokens in the
@@ -23,12 +23,10 @@ import org.lattejava.web.oidc.internal.*;
  * {@code id_token}). Subsequent requests through the same {@link WebTest} are authenticated as the logged-in user.
  * {@link #logout()} removes those cookies from the jar.
  * <p>
- * One fixture represents one OAuth client: {@link OIDCConfig#clientId()} identifies the client on every request, and
- * the token-exchange shape is dictated by {@link OIDCConfig#publicClient()} — confidential clients
- * ({@code publicClient=false}, the default) authenticate via HTTP Basic with {@link OIDCConfig#clientSecret()}; public
- * clients ({@code publicClient=true} — CLI, native, desktop, console, SPA) send {@code client_id} in the form body and
- * rely on PKCE. PKCE is used in both modes. Tests that need to drive logins for multiple clients should construct one
- * {@code OIDCConfig} + {@code OIDCTestFixture} per client.
+ * One fixture represents one OAuth client, identified by {@link OIDCConfig#clientId()} on every request. Confidential
+ * clients ({@link OIDCConfig#publicClient()} is {@code false}, the default) authenticate the token exchange with HTTP
+ * Basic and {@link OIDCConfig#clientSecret()}; public clients send {@code client_id} in the form body. PKCE is used in
+ * both modes. Construct one {@code OIDCConfig} and {@code OIDCTestFixture} per client.
  * <p>
  * The redirect URI is supplied per {@link #login} call. The two-arg overload defaults to
  * {@code http://localhost:<webTest.port><browser.callbackPath()>} for the SSR web-app case; the three-arg overload
@@ -63,7 +61,8 @@ public class OIDCTestFixture {
    *
    * @param webTest The test client whose cookie jar will hold auth cookies after a successful {@link #login}.
    * @param config  The OIDC configuration for the client under test.
-   * @param browser The browser settings that determine cookie names and paths.
+   * @param browser The browser settings. Only {@link BrowserSettings#callbackPath()} is used, to build the default
+   *                redirect URI.
    */
   public OIDCTestFixture(WebTest webTest, OIDCConfig config, BrowserSettings browser) {
     this.webTest = webTest;
@@ -120,33 +119,35 @@ public class OIDCTestFixture {
   }
 
   /**
-   * SSR convenience: walks the OAuth2 authorization-code flow with the redirect URI defaulted to
-   * {@code http://localhost:<webTest.port><browser.callbackPath()>}. Equivalent to
+   * Walks the OAuth2 authorization-code flow with the redirect URI defaulted to
+   * {@code http://localhost:<webTest.port><browser.callbackPath()>}, the SSR web-app case. Equivalent to
    * {@link #login(String, String, String)} with that URI.
    *
    * @param email    The user's email address.
    * @param password The user's password.
-   * @return The access, refresh, and id tokens plus the expiry (any may be null if the IdP omits them).
-   * @throws Exception If the OAuth flow or token exchange fails.
+   * @return The issued tokens. The refresh token, id token, and {@code expiresIn} may be {@code null} if the provider
+   *     omits them.
+   * @throws Exception if the OAuth flow or token exchange fails.
    */
   public Tokens login(String email, String password) throws Exception {
     return login(email, password, "http://localhost:" + webTest.port + browser.callbackPath());
   }
 
   /**
-   * Walks the OAuth2 authorization-code flow against the configured IdP for the given user with an explicit redirect
-   * URI, exchanges the resulting code for tokens, stores those tokens as cookies in the {@link WebTest} cookie jar, and
-   * returns them. After this call returns, subsequent requests through the test client are authenticated as the user;
-   * callers that need the raw tokens (e.g. for explicit {@code Cookie} headers or {@code Authorization: Bearer} usage
-   * from a CLI/native simulation) can use the returned {@link Tokens}.
+   * Walks the OAuth2 authorization-code flow against the configured provider for the given user with an explicit
+   * redirect URI, exchanges the resulting code for tokens, stores those tokens as cookies in the {@link WebTest} cookie
+   * jar, and returns them. Subsequent requests through the test client are authenticated as the user. Callers that
+   * need the raw tokens (for example, for an {@code Authorization: Bearer} header in a CLI simulation) can use the
+   * returned {@link Tokens}.
    *
    * @param email       The user's email address.
    * @param password    The user's password.
    * @param redirectURI The redirect URI registered for {@link OIDCConfig#clientId()}. The fixture stops walking
    *                    redirects as soon as a {@code Location} header points at this URI and parses the code from the
    *                    query string; it is also sent verbatim as {@code redirect_uri} on the token exchange.
-   * @return The access, refresh, and id tokens plus the expiry (any may be null if the IdP omits them).
-   * @throws Exception If the OAuth flow or token exchange fails.
+   * @return The issued tokens. The refresh token, id token, and {@code expiresIn} may be {@code null} if the provider
+   *     omits them.
+   * @throws Exception if the OAuth flow or token exchange fails.
    */
   public Tokens login(String email, String password, String redirectURI) throws Exception {
     AuthorizationCode auth = fetchAuthorizationCode(email, password, redirectURI);
@@ -191,16 +192,16 @@ public class OIDCTestFixture {
   }
 
   /**
-   * Drives the IdP's hosted-login OAuth2 authorize flow as a browser would, then returns the resulting authorization
-   * code along with the {@code state} value (also the PKCE code-verifier under Latte's single-value scheme). Exposed to
-   * subclasses for fixtures that need direct access to the issued code without performing the token exchange.
+   * Drives the provider's hosted-login OAuth2 authorize flow as a browser would, then returns the resulting
+   * authorization code along with the {@code state} value (also the PKCE code verifier under Latte's single-value
+   * scheme). Exposed to subclasses for fixtures that need the issued code without performing the token exchange.
    *
    * @param email       The user's email.
    * @param password    The user's password.
    * @param redirectURI The redirect URI registered for {@link OIDCConfig#clientId()}; the walker stops as soon as a
    *                    {@code Location} header points at this URI and parses the code from the query string.
    * @return The issued authorization code and the state used to obtain it.
-   * @throws Exception If the authorize chain does not terminate at {@code redirectURI}.
+   * @throws Exception if a request to the provider fails or the authorize chain does not end at {@code redirectURI}.
    */
   protected AuthorizationCode fetchAuthorizationCode(String email, String password, String redirectURI) throws Exception {
     byte[] stateBytes = new byte[22];
@@ -256,6 +257,10 @@ public class OIDCTestFixture {
   public record AuthorizationCode(String code, String state) {
   }
 
+  /**
+   * Where a redirect walk stopped: the authorization code when the chain reached the redirect URI, otherwise the last
+   * {@code Location} and status code.
+   */
   public record Result(String code, String lastLocation, int lastStatusCode) {
   }
 }

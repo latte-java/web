@@ -8,7 +8,8 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * Handles the return from the OIDC logout endpoint.
+ * Handles the return from the IdP's logout endpoint: clears the tokens and session cookies, then redirects to the
+ * post-logout page.
  *
  * @author Brian Pontarelli
  */

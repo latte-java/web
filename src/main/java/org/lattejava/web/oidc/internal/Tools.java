@@ -11,7 +11,7 @@ import module org.lattejava.jwt;
 import module org.lattejava.web;
 
 /**
- * Helpers for OIDC, networking, JSON, etc.
+ * Shared helpers for the OIDC middlewares and handlers.
  *
  * @author Brian Pontarelli
  */
@@ -29,9 +29,9 @@ public class Tools {
   }
 
   /**
-   * Sets all the auth cookies using explicit names and max-age. If any token is null, it is not set. Cookie policy
-   * mirrors the OIDCConfig overload: id/access use SameSite=Lax; refresh uses SameSite=Strict (default) with the
-   * supplied max-age.
+   * Sets the auth cookies, skipping any {@code null} token. The id and access token cookies use SameSite=Lax with
+   * {@code expirySeconds} as their max-age; the refresh token cookie uses the default SameSite=Strict with
+   * {@code refreshTokenMaxAge}. The id token cookie is not HttpOnly.
    *
    * @param req                The current request.
    * @param res                The response.
@@ -108,9 +108,8 @@ public class Tools {
   }
 
   /**
-   * Converts a flat JSON object of claims to a {@link JWT}, mapping each property to a claim. Used to build the bound
-   * JWT from an IdP response (RFC 7662 introspection or userinfo) when the access token is opaque and cannot be decoded
-   * locally.
+   * Converts the claims of an RFC 7662 introspection response to a {@link JWT}, mapping each property to a claim. Used
+   * to build the bound JWT when the access token is opaque and cannot be decoded locally.
    *
    * @param introspect The JSON introspect object.
    * @return The JWT.
@@ -147,20 +146,19 @@ public class Tools {
   }
 
   /**
-   * Safely reads a cookie from the request. If the cookie is not present, null is returned.
+   * Reads a cookie from the request.
    *
    * @param req  The request.
    * @param name The name of the cookie.
-   * @return The cookie value, or null.
+   * @return The cookie value, or {@code null} if the cookie is not present.
    */
   public static String readCookie(HTTPRequest req, String name) {
     return COOKIES.read(name).from(req);
   }
 
   /**
-   * Exchanges a refresh token for a fresh token set at the configured token endpoint, parsing the response. This is the
-   * transport-agnostic core shared by every profile's {@code Authentication} orchestrator; writing the new tokens back
-   * is delegated to the profile's {@link TokenWriter}.
+   * Exchanges a refresh token for a fresh token set at the configured token endpoint. Shared by {@link Authentication}
+   * for every profile; writing the new tokens back is left to the profile's {@link TokenWriter}.
    *
    * @param config       The OIDC configuration.
    * @param refreshToken The refresh token to exchange.
@@ -194,8 +192,12 @@ public class Tools {
   }
 
   /**
-   * Enforces that the URI uses HTTPS, except when the host is a loopback address. This makes local development with
-   * {@code http://localhost:9012} (etc.) workable without undermining production security posture.
+   * Enforces that the URI uses HTTPS, except for loopback hosts so local development can use plain HTTP. A {@code null}
+   * URI is allowed.
+   *
+   * @param field The configuration field name, used in the error message.
+   * @param uri   The URI to check, or {@code null}.
+   * @throws IllegalArgumentException if the URI is not HTTPS and its host is not loopback.
    */
   public static void requireSecureURI(String field, URI uri) {
     if (uri == null) {
@@ -221,7 +223,7 @@ public class Tools {
    *
    * @param res The response to write the HTML to.
    * @param url The URL to refresh to.
-   * @throws IOException If the write fails.
+   * @throws IOException if the write fails.
    */
   public static void writeMetaRefresh(HTTPResponse res, String url) throws IOException {
     res.setStatus(200);

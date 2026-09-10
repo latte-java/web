@@ -99,10 +99,10 @@ public class OIDC<U> {
   }
 
   /**
-   * Returns the raw JWT bound to the current request. Throws if called outside a protected route.
+   * Returns the raw JWT bound to the current request.
    *
    * @return The bound JWT.
-   * @throws UnauthenticatedException If no JWT is currently bound.
+   * @throws UnauthenticatedException if no JWT is bound (the route is not behind {@link #authenticated()}).
    */
   public static JWT jwt() {
     if (!Tools.CURRENT_JWT.isBound()) {
@@ -169,7 +169,7 @@ public class OIDC<U> {
    * Creates an SPA-mode profile with explicit {@link BrowserSettings} and a custom translator.
    *
    * @param config     The IdP configuration.
-   * @param browser    The browser settings (cookie names for reading tokens).
+   * @param browser    The browser settings (token transport).
    * @param translator Maps the bound JWT to a domain object.
    * @param <U>        The user type.
    * @return The profile instance.
@@ -204,7 +204,7 @@ public class OIDC<U> {
    * Creates an SSR-mode profile with explicit {@link BrowserSettings} and a custom translator.
    *
    * @param config     The IdP configuration.
-   * @param browser    The browser settings (cookie names, redirect targets, challenge pages).
+   * @param browser    The browser settings (token transport, redirect targets, challenge handlers).
    * @param translator Maps the bound JWT to a domain object.
    * @param <U>        The user type.
    * @return The profile instance.
@@ -243,6 +243,7 @@ public class OIDC<U> {
    *
    * @param roles One or more roles; the authenticated user must possess every one.
    * @return The authorization middleware.
+   * @throws IllegalArgumentException if no roles are provided.
    */
   public Middleware hasAllRoles(String... roles) {
     return new Authorization(Authorizer.hasAllRoles(config.roleExtractor(), roles), challenge, writer);
@@ -254,6 +255,7 @@ public class OIDC<U> {
    *
    * @param roles One or more roles; the authenticated user must possess at least one.
    * @return The authorization middleware.
+   * @throws IllegalArgumentException if no roles are provided.
    */
   public Middleware hasAnyRole(String... roles) {
     return new Authorization(Authorizer.hasAnyRole(config.roleExtractor(), roles), challenge, writer);
@@ -270,11 +272,10 @@ public class OIDC<U> {
   }
 
   /**
-   * Translates the JWT bound to the current request into the configured user type. Throws if called outside a protected
-   * route.
+   * Translates the JWT bound to the current request into the configured user type.
    *
    * @return The translated user.
-   * @throws UnauthenticatedException If no JWT is currently bound.
+   * @throws UnauthenticatedException if no JWT is bound (the route is not behind {@link #authenticated()}).
    */
   public U user() {
     if (!Tools.CURRENT_JWT.isBound()) {

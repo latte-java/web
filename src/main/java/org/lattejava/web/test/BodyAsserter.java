@@ -20,7 +20,7 @@ public abstract class BodyAsserter {
   /**
    * Sets the response body to assert against. Called by {@link WebTestAsserter} before the consumer runs.
    *
-   * @param body The response body, may be {@code null}.
+   * @param body The response body, or {@code null}.
    */
   public void body(byte[] body) {
     this.body = body;

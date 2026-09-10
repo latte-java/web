@@ -9,7 +9,7 @@ import module java.base;
 import org.lattejava.web.internal.*;
 
 /**
- * Toolkit for working with JSON and objects.
+ * Helpers that parse, normalize, render, and write the JSON trees used by {@link JSONBodyAsserter}.
  *
  * @author Brian Pontarelli
  */
@@ -39,7 +39,8 @@ public class JSONTools {
 
   /**
    * Converts a record or a POJO with public fields to a JSON object shape via reflection. Null-valued components and
-   * fields are omitted, mirroring the <code>json</code> library's {@code omitNulls} default.
+   * fields are omitted, mirroring the <code>json</code> library's {@code omitNulls} default. Fails with
+   * {@link AssertionError} if the type is neither a record nor a class with public fields, or if reflection is denied.
    */
   public static Object objectToJSONMap(Object value) {
     Class<?> type = value.getClass();
@@ -84,7 +85,8 @@ public class JSONTools {
   /**
    * Parses a JSON document into its natural Java shape. The underlying parser only accepts object-rooted documents, so
    * the document is wrapped in a single-key envelope before parsing; this lets bodies be any JSON value (object, array,
-   * or scalar).
+   * or scalar). Fails with {@link AssertionError}, naming {@code label}, when {@code json} is {@code null} or
+   * malformed.
    */
   public static Object parse(String json, String label) {
     if (json == null) {
@@ -111,7 +113,7 @@ public class JSONTools {
   }
 
   /**
-   * Renders a parsed JSON value as pretty-printed JSON text via the vendored {@link JSONWriter} (2-space indent, map
+   * Renders a parsed JSON value as pretty-printed JSON text via the vendored {@code JSONWriter} (2-space indent, map
    * insertion order preserved). When {@code escapeTokens} is {@code true}, literal <code>${</code> sequences in string
    * values are escaped as <code>$${</code> so the output can be written as an expected JSON file; preserved tokens
    * ({@link ExpectedJSONFile.Placeholder} and {@link Verbatim} nodes) are rendered exactly as they appeared in the
@@ -122,7 +124,7 @@ public class JSONTools {
   }
 
   /**
-   * Renders a parsed JSON value back to compact JSON text for failure messages, via the vendored {@link JSONWriter}.
+   * Renders a parsed JSON value back to compact JSON text for failure messages, via the vendored {@code JSONWriter}.
    */
   public static String stringify(Object node) {
     return JSONWriter.acquire(false, false).anyElement(unwrap(node, false)).finishString();
@@ -195,7 +197,7 @@ public class JSONTools {
   }
 
   /**
-   * Normalizes a tree to the natural shapes {@link JSONWriter} writes: {@link ExpectedJSONFile.Placeholder} and
+   * Normalizes a tree to the natural shapes {@code JSONWriter} writes: {@link ExpectedJSONFile.Placeholder} and
    * {@link Verbatim} nodes become their original file text, and literal <code>${</code> sequences in string values are
    * escaped as <code>$${</code> when {@code escapeTokens} is {@code true}.
    */

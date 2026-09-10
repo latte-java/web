@@ -36,7 +36,7 @@ public class WebTest {
   public HttpClient client;
 
   /**
-   * Creates a new request simulator that can be used to make requests to a Web application.
+   * Creates a tester that sends requests to the Web application listening on the given port.
    *
    * @param port The port to use for non-TLS connections.
    */
@@ -61,7 +61,8 @@ public class WebTest {
   }
 
   /**
-   * Builds a local testing URI using {@code localhost} and the configured port plus the path.
+   * Builds an {@code http://localhost:<port>} URI for the path, appending any registered URL parameters as the query
+   * string.
    *
    * @param path The path.
    * @return The URI.
@@ -187,7 +188,7 @@ public class WebTest {
   }
 
   /**
-   * Sets the request body. Subsequent verb calls will send this body.
+   * Sets the request body to the UTF-8 bytes of the string. Otherwise identical to {@link #withBody(byte[])}.
    *
    * @param body The body to send.
    * @return This tester for chaining.

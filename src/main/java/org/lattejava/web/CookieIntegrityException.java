@@ -5,9 +5,9 @@
 package org.lattejava.web;
 
 /**
- * Thrown when an encrypted cookie cannot be authenticated — either because its wire format is not a valid Base64URL-
- * encoded AES-GCM ciphertext or because the GCM tag fails to verify under every configured key. The latter is
- * indistinguishable from active tampering; treat both as "this cookie is no good, clear it."
+ * Thrown when an encrypted cookie cannot be authenticated, either because its wire format is not valid
+ * Base64URL-encoded AES-GCM ciphertext or because the GCM tag fails to verify under every configured key. The latter is
+ * indistinguishable from tampering; treat both as "this cookie is no good, clear it."
  *
  * @author Brian Pontarelli
  */

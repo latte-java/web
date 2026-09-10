@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-10
+
+### Added
+
+- `RequestContext` exposes the current `HTTPRequest` and `HTTPResponse` as `ScopedValue`s that `Web` binds for the duration of every request. A DI framework can read them from a prototype-scoped provider to inject the request and response into handlers, controllers, and services.
+
+### Changed
+
+- `Flash` messages have a freeform type. `addMessage(type, message)` replaces `addMessage(message)`, `messages()` returns the messages grouped by type, and `messages(type)` and `hasMessages(type)` read one type. The cookie JSON is now `{"messages":{"<type>":[...]}}`; cookies in the earlier bare-array shape read as no messages.
+
 ## [0.9.0] - 2026-09-10
 
 ### Added

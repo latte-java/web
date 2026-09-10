@@ -51,7 +51,8 @@ public class JSONBodyAsserter extends BodyAsserter {
   }
 
   /**
-   * Asserts that the body is JSON-equivalent to the given expected string. Whitespace and key ordering are ignored.
+   * Asserts that the body is JSON-equivalent to the given expected string. Whitespace and object key order are ignored;
+   * array order follows the {@link #unorderedArrays(boolean)} setting.
    *
    * @param expected The expected JSON document.
    * @return This asserter for chaining.
@@ -90,18 +91,12 @@ public class JSONBodyAsserter extends BodyAsserter {
   }
 
   /**
-   * Asserts that the body, parsed as JSON, is equal to the JSON form of the given Java object. The expected object is
-   * converted to its JSON shape the same way the Latte <code>json</code> library would serialize it: {@link Map}s
-   * become JSON objects, {@link Iterable}s and arrays become JSON arrays, numbers, booleans, strings, and {@code null}
-   * map to their JSON scalar forms, enums use their {@code name()}, and {@link UUID}, {@link URI}, {@link URL}, and the
-   * ISO-8601 {@code java.time} types use their string forms. Records and POJOs with public fields are converted via
-   * reflection; {@code null} components and fields are omitted, mirroring the library's {@code omitNulls} default.
-   * Object-key ordering is always ignored; array ordering follows the {@link #unorderedArrays(boolean)} setting.
-   * <p>
-   * Reflection over a record or POJO in a named module requires its package to be opened (or exported) to
-   * {@code org.lattejava.web}.
+   * Converts the raw body with the given function and asserts that the result equals the expected object using
+   * {@link Object#equals}. Fails if the body is {@code null} or empty.
    *
-   * @param expected The expected value.
+   * @param <T>       The converted type.
+   * @param converter The function that converts the body bytes, typically a generated {@code fromJSON} method.
+   * @param expected  The expected value.
    * @return This asserter for chaining.
    */
   public <T> JSONBodyAsserter equalTo(Function<byte[], T> converter, T expected) {
@@ -125,8 +120,8 @@ public class JSONBodyAsserter extends BodyAsserter {
    *   <li><strong>Substitutions</strong> — values the test knows, referenced as {@code "${name}"} and supplied as
    *   name/value varargs pairs ({@code equalToFile(path, "applicationId", id)}). A string node that is exactly one
    *   token is replaced by the value with its JSON type intact. For example, {@code "foo": "${number}"} becomes
-   *   {@code "foo": 42} if the replacement is a number. If it's replacement is a String, it remains a String. This
-   *   allows IDEs and editors to validate the JSON file correctly. A string node with embedded tokens
+   *   {@code "foo": 42} if the replacement is a number, and stays a string if the replacement is a string. Tokens
+   *   always sit inside JSON strings, so editors can still validate the file. A string node with embedded tokens
    *   ({@code "http://localhost:${port}/"}) splices in the value's text form and remains a string.</li>
    *   <li><strong>Placeholders</strong> — values the test cannot know, each of which must be the entire string node:
    *   {@code "${anyBoolean}"}, {@code "${anyInstant}"}, {@code "${anyNumber}"}, {@code "${anyString}"},
@@ -142,7 +137,7 @@ public class JSONBodyAsserter extends BodyAsserter {
    *   not both.</li>
    * </ul>
    * <p>
-   * NOTE: {@code anyInstant} is an ISO instant, not a milliseconds since Epoch.
+   * {@code anyInstant} matches an ISO 8601 instant string, not epoch milliseconds.
    * <p>
    * A literal <code>${</code> in expected text is escaped as <code>$${</code>. Any other unescaped <code>${</code>
    * occurrence (an unknown name, a malformed or unterminated token) fails the assertion, as does a supplied
@@ -158,7 +153,7 @@ public class JSONBodyAsserter extends BodyAsserter {
    * @param file          The expected JSON file.
    * @param substitutions Substitution name/value pairs; each name must be a {@link String}.
    * @return This asserter for chaining.
-   * @throws IllegalArgumentException If the substitutions are not name/value pairs or a name is not a String.
+   * @throws IllegalArgumentException if the substitutions are not name/value pairs or a name is not a String.
    */
   public JSONBodyAsserter equalToFile(Path file, Object... substitutions) {
     if (substitutions.length % 2 != 0) {
@@ -273,7 +268,7 @@ public class JSONBodyAsserter extends BodyAsserter {
   }
 
   /**
-   * Toggles whether array equality ignores element order. May be called at any time, including between assertions on
+   * Sets whether array equality ignores element order. May be called at any time, including between assertions on
    * the same instance.
    *
    * @param unorderedArrays {@code true} to compare arrays as multisets, {@code false} to require positional equality.
@@ -312,7 +307,7 @@ public class JSONBodyAsserter extends BodyAsserter {
 
   /**
    * Deep equality between two JSON values. JSON objects are always compared as unordered (compare key sets, recurse on
-   * values). JSON arrays compare as multisets when {@link #unorderedArrays} is {@code true}, or positionally when
+   * values). JSON arrays compare as multisets when {@code unorderedArrays} is {@code true}, or positionally when
    * {@code false}. Decimals compare numerically (scale-insensitive), but cross-type comparisons stay strict (an integer
    * never equals a decimal, and a number never equals a string).
    */

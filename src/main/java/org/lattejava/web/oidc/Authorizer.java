@@ -24,7 +24,7 @@ public interface Authorizer {
    * @param roleExtractor A function that extracts the set of role strings from a JWT.
    * @param roles         One or more required roles; at least one must be supplied.
    * @return The authorizer.
-   * @throws IllegalArgumentException If no roles are provided.
+   * @throws IllegalArgumentException if no roles are provided.
    */
   static Authorizer hasAllRoles(Function<JWT, Set<String>> roleExtractor, String... roles) {
     if (roles == null || roles.length == 0) {
@@ -41,7 +41,7 @@ public interface Authorizer {
    * @param roleExtractor A function that extracts the set of role strings from a JWT.
    * @param roles         One or more required roles; at least one must be supplied.
    * @return The authorizer.
-   * @throws IllegalArgumentException If no roles are provided.
+   * @throws IllegalArgumentException if no roles are provided.
    */
   static Authorizer hasAnyRole(Function<JWT, Set<String>> roleExtractor, String... roles) {
     if (roles == null || roles.length == 0) {

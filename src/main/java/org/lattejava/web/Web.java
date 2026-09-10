@@ -48,7 +48,8 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Adds a shutdown hook that runs the given task when the JVM shuts down.
+   * Adds a task that runs after the server is shut down, whether by {@link #close()} or by the JVM shutdown hook that
+   * {@link #start(int)} registers. Tasks run in the order they were added.
    *
    * @param task The task to run.
    * @return This Web instance for chaining.
@@ -76,7 +77,9 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Shuts down the server and removes the JVM shutdown hook.
+   * Shuts down the server, runs the shutdown tasks, and removes the JVM shutdown hook.
+   *
+   * @throws IllegalStateException if called on a prefix child Web.
    */
   public void close() {
     if (isChild) {
@@ -194,8 +197,9 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Sets the injector used by {@link #inject(Class)} and {@link #inject(Class, ControllerHandler)}. The injector is
-   * called on each request, so it controls instance lifetime. Must be called before {@code inject}.
+   * Sets the injector used by the {@code inject} methods. The injector is called on each request, so it controls
+   * instance lifetime. Must be called before {@code inject}. See {@link RequestContext} to make the request and
+   * response themselves injectable.
    *
    * @param injector The injector.
    * @return This Web instance for chaining.
@@ -214,12 +218,12 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Registers global middlewares that run for every matched request, in registration order, before any per-route
-   * middlewares and the handler. Multiple calls append to the existing list.
-   * <p>
-   * Must be called before {@link #start(int)}.
+   * Registers middlewares that run, in registration order, before any per-route middlewares and the handler. On the
+   * root instance they run for every request; on an instance created by {@link #prefix(String, Consumer)} they run only
+   * for requests under that prefix. They also run before the missing handler. Multiple calls append to the existing
+   * list.
    *
-   * @param middlewares One or more middlewares to install globally.
+   * @param middlewares One or more middlewares to install.
    * @return This Web instance for chaining.
    * @throws IllegalStateException    if called after {@link #start(int)}.
    * @throws IllegalArgumentException if any entry in {@code middlewares} is null.
@@ -332,12 +336,14 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Groups routes under a common path prefix. Routes registered inside the callback have the prefix prepended. Prefixes
-   * nest when called inside another prefix callback.
+   * Groups routes under a common path prefix. Routes registered inside the callback have the prefix prepended, and
+   * middlewares installed inside it apply only under the prefix. Prefixes nest when called inside another prefix
+   * callback.
    *
    * @param newPrefix The prefix to prepend to all routes in the group.
    * @param group     A consumer that receives a Web instance scoped to the prefix.
    * @return This Web instance for chaining.
+   * @throws IllegalStateException if called after {@link #start(int)}.
    */
   public Web prefix(String newPrefix, Consumer<Web> group) {
     if (started.get()) {
@@ -390,6 +396,9 @@ public class Web implements AutoCloseable {
    * @param handler     The handler to invoke when the route matches.
    * @param middlewares Zero or more per-route middlewares to run before the handler.
    * @return This Web instance for chaining.
+   * @throws IllegalStateException    if called after {@link #start(int)}.
+   * @throws IllegalArgumentException if {@code methods} is empty or holds a null, blank, or invalid method, if
+   *                                  {@code pathSpec} is invalid, or if any entry in {@code middlewares} is null.
    */
   public Web route(Collection<String> methods, String pathSpec, Handler handler, Middleware... middlewares) {
     if (started.get()) {
@@ -427,8 +436,9 @@ public class Web implements AutoCloseable {
   /**
    * Registers a route that matches the given HTTP methods on the given path, parsing the body with the given supplier.
    * <p>
-   * The supplier is called after any middlewares. If the supplier returns {@code null}, it signals a handled error
-   * condition (e.g., the supplier already set a 400 status); the body handler is short-circuited and not invoked.
+   * The supplier runs after any middlewares. If it throws, the handler is not invoked and the exception propagates (an
+   * {@link HTTPException} is rendered with its status). If it returns {@code null}, the handler is invoked with a
+   * {@code null} body. See {@link BodySupplier#get(HTTPRequest, HTTPResponse)}.
    *
    * @param <T>         The type of the parsed body.
    * @param methods     The HTTP methods this route responds to (e.g., {@code List.of("POST", "PUT")}).
@@ -437,6 +447,10 @@ public class Web implements AutoCloseable {
    * @param supplier    The supplier that parses the request body.
    * @param middlewares Zero or more per-route middlewares to run before the handler.
    * @return This Web instance for chaining.
+   * @throws IllegalStateException    if called after {@link #start(int)}.
+   * @throws IllegalArgumentException if {@code methods} is empty or holds a null, blank, or invalid method, if
+   *                                  {@code pathSpec} is invalid, or if any entry in {@code middlewares} is null.
+   * @see #route(Collection, String, Handler, Middleware...)
    */
   public <T> Web route(Collection<String> methods, String pathSpec, BodyHandler<T> bodyHandler, BodySupplier<T> supplier, Middleware... middlewares) {
     Objects.requireNonNull(bodyHandler, "bodyHandler cannot be null");
@@ -451,10 +465,12 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Starts the HTTP server using the given listener configurations.
+   * Starts the HTTP server using the given listener configurations. Route and middleware registration is locked once
+   * the server starts.
    *
    * @param listeners The listener configurations.
    * @return This Web instance for chaining.
+   * @throws IllegalStateException if called on a prefix child Web, or if the server has already been started.
    */
   public Web start(HTTPListenerConfiguration... listeners) {
     if (isChild) {
@@ -497,6 +513,8 @@ public class Web implements AutoCloseable {
    *
    * @param port The port to listen on.
    * @return This Web instance for chaining.
+   * @throws IllegalStateException if called on a prefix child Web, or if the server has already been started.
+   * @see #start(HTTPListenerConfiguration...)
    */
   public Web start(int port) {
     return start(new HTTPListenerConfiguration(port));
@@ -556,14 +574,22 @@ public class Web implements AutoCloseable {
   }
 
   private void handleRequest(HTTPRequest request, HTTPResponse response) throws Exception {
-    try {
-      dispatch(request, response);
-    } catch (HTTPException e) {
-      // Baseline safety net: render any uncaught HTTPException so framework failures (e.g. a body that fails to parse)
-      // produce their carried status without requiring an ExceptionHandler to be installed. A user-installed
-      // ExceptionHandler runs inside the chain and gets first crack; this only handles what reaches the top.
-      ExceptionHandler.DEFAULT_RENDERER.render(request, response, e);
-    }
+    // Bind the request and response for everything below this point (middlewares, handlers, and anything an Injector
+    // creates for them) so RequestContext can hand them out without parameters.
+    ScopedValue.where(RequestContext.REQUEST, request)
+               .where(RequestContext.RESPONSE, response)
+               .call(() -> {
+                 try {
+                   dispatch(request, response);
+                 } catch (HTTPException e) {
+                   // Baseline safety net: render any uncaught HTTPException so framework failures (e.g. a body that
+                   // fails to parse) produce their carried status without requiring an ExceptionHandler to be
+                   // installed. A user-installed ExceptionHandler runs inside the chain and gets first crack; this
+                   // only handles what reaches the top.
+                   ExceptionHandler.DEFAULT_RENDERER.render(request, response, e);
+                 }
+                 return null;
+               });
   }
 
   private Injector requireInjector() {

@@ -9,7 +9,8 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * A handler that redirects the user to the OIDC provider's authorization endpoint. This handles PKCE as well.
+ * Redirects the browser to the IdP's authorization endpoint with PKCE. The random state value doubles as the PKCE code
+ * verifier and is stored in a transient cookie, as is any safe {@code return_to} path.
  *
  * @author Brian Pontarelli
  */

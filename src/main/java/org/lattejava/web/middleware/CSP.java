@@ -8,7 +8,7 @@ import module java.base;
 
 /**
  * A fluent builder for {@code Content-Security-Policy} header values. Pair with
- * {@link SecurityHeaders.Builder#contentSecurityPolicy(CSP)} to plug the result into the security-headers middleware.
+ * {@link SecurityHeaders#contentSecurityPolicy(CSP)} to plug the result into the security-headers middleware.
  *
  * @author Brian Pontarelli
  */
@@ -54,8 +54,9 @@ public class CSP {
   }
 
   /**
-   * @param value The nonce value (the random per-response token). Must be non-null and non-empty.
+   * @param value The nonce value (the random per-response token).
    * @return The source expression for the nonce, e.g. {@code 'nonce-abc123'}.
+   * @throws IllegalArgumentException if {@code value} is null or empty.
    */
   public static String nonce(String value) {
     requireNonEmpty(value, "nonce value");
@@ -65,6 +66,7 @@ public class CSP {
   /**
    * @param base64Digest The base64-encoded SHA-256 digest of the inline block's bytes.
    * @return The source expression for the hash, e.g. {@code 'sha256-aZkLp='}.
+   * @throws IllegalArgumentException if {@code base64Digest} is null or empty.
    */
   public static String sha256(String base64Digest) {
     requireNonEmpty(base64Digest, "sha256 digest");
@@ -74,6 +76,7 @@ public class CSP {
   /**
    * @param base64Digest The base64-encoded SHA-384 digest of the inline block's bytes.
    * @return The source expression for the hash, e.g. {@code 'sha384-aZkLp='}.
+   * @throws IllegalArgumentException if {@code base64Digest} is null or empty.
    */
   public static String sha384(String base64Digest) {
     requireNonEmpty(base64Digest, "sha384 digest");
@@ -83,6 +86,7 @@ public class CSP {
   /**
    * @param base64Digest The base64-encoded SHA-512 digest of the inline block's bytes.
    * @return The source expression for the hash, e.g. {@code 'sha512-aZkLp='}.
+   * @throws IllegalArgumentException if {@code base64Digest} is null or empty.
    */
   public static String sha512(String base64Digest) {
     requireNonEmpty(base64Digest, "sha512 digest");
@@ -137,6 +141,8 @@ public class CSP {
    * @param name   The directive name.
    * @param values The source values to append.
    * @return This builder.
+   * @throws IllegalArgumentException if {@code name} is not a valid directive name, or a value is null, empty, or
+   *                                  contains {@code ;} or whitespace.
    */
   public CSP addDirective(String name, String... values) {
     validateDirectiveName(name);
@@ -249,6 +255,8 @@ public class CSP {
    * @param values The source values to set (e.g. {@code 'self'}, {@code https://example.com}). Pass none for a flag
    *               directive.
    * @return This builder.
+   * @throws IllegalArgumentException if {@code name} is not a valid directive name, or a value is null, empty, or
+   *                                  contains {@code ;} or whitespace.
    */
   public CSP directive(String name, String... values) {
     validateDirectiveName(name);
@@ -321,14 +329,15 @@ public class CSP {
   }
 
   /**
-   * Removes the given source values from the named directive. No-op if the directive is absent or is a flag directive.
-   * Values not present in the directive are silently skipped. If the directive was non-empty before this call and is
-   * empty after, it is dropped from the policy (empty source-list directives are meaningless). Flag directives (empty
-   * value lists) are immune to this method; use {@link #remove(String)} to drop them.
+   * Removes the given source values from the named directive, dropping the directive if it becomes empty. Values that
+   * are not present are skipped. Flag directives (empty value lists) are left alone; use {@link #remove(String)} to
+   * drop them.
    *
    * @param name   The directive name.
    * @param values The source values to remove.
    * @return This builder.
+   * @throws IllegalArgumentException if {@code name} is not a valid directive name, or a value is null, empty, or
+   *                                  contains {@code ;} or whitespace.
    */
   public CSP removeDirective(String name, String... values) {
     validateDirectiveName(name);

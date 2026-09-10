@@ -19,8 +19,8 @@ import module org.lattejava.web;
  *       (the default) — non-browser clients such as curl and build tools don't auto-attach cookies,
  *       so there is no CSRF vector to defend against.</li>
  *   <li>A present {@code Origin} header must match either one of the configured {@code allowedOrigins}
- *       or, when unconfigured, the request's own {@link HTTPRequest#getBaseURL() base URL}. A mismatch
- *       returns 403.</li>
+ *       or, when unconfigured, the request's own {@link HTTPRequest#getBaseURL() base URL}. A mismatch, or an
+ *       {@code Origin} that cannot be parsed, returns 403.</li>
  * </ul>
  *
  * @author Brian Pontarelli
@@ -56,6 +56,8 @@ public class OriginChecks implements Middleware {
    * @param allowedOrigins The origins permitted on unsafe-method requests. Must be non-empty. Each URI must be
    *                       origin-only (scheme + host, optional port, no path beyond {@code /}, no
    *                       userinfo/query/fragment).
+   * @throws IllegalArgumentException if {@code allowedOrigins} is empty or contains a URI that is not origin-only.
+   * @throws NullPointerException     if {@code allowedOrigins} contains {@code null}.
    */
   public OriginChecks(List<URI> allowedOrigins) {
     this(false, allowedOrigins);
@@ -68,6 +70,8 @@ public class OriginChecks implements Middleware {
    * @param allowedOrigins The origins permitted on unsafe-method requests, or {@code null} to auto-derive from
    *                       {@link HTTPRequest#getBaseURL()}. When non-null, must be non-empty; each URI must be
    *                       origin-only.
+   * @throws IllegalArgumentException if {@code allowedOrigins} is empty or contains a URI that is not origin-only.
+   * @throws NullPointerException     if {@code allowedOrigins} contains {@code null}.
    */
   public OriginChecks(boolean requireOrigin, List<URI> allowedOrigins) {
     this.requireOrigin = requireOrigin;

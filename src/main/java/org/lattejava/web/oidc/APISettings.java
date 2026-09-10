@@ -36,9 +36,9 @@ public record APISettings(TokenReader tokenReader, TokenWriter tokenWriter) {
     private TokenWriter tokenWriter;
 
     /**
-     * Validates the builder state and returns a new immutable {@link APISettings}.
+     * Returns a new {@link APISettings}, using the default header transport for any reader or writer that was not set.
      *
-     * @return The immutable settings.
+     * @return The settings.
      */
     public APISettings build() {
       TokenReader reader = tokenReader != null ? tokenReader : new HeaderTokenReader(AUTHORIZATION, X_REFRESH_TOKEN);

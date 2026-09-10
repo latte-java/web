@@ -9,7 +9,7 @@ package org.lattejava.web;
  * {@code HTTPException} (or a subtype) from a handler or middleware lets the framework render the response without any
  * caller-supplied exception-to-status mapping: the
  * {@link org.lattejava.web.middleware.ExceptionHandler#DEFAULT_RENDERER default renderer} reads {@link #status()} and
- * writes the message as the body.
+ * writes a JSON body that carries the exception type and message.
  * <p>
  * Semantic subtypes ({@link BadRequestException}, {@link UnauthenticatedException}, {@link ForbiddenException},
  * {@link ServiceUnavailableException}) preset the status, so application and framework code can throw a meaningful type

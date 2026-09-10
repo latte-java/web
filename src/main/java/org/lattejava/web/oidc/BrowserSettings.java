@@ -10,10 +10,9 @@ import org.lattejava.web.*;
 import org.lattejava.web.oidc.internal.*;
 
 /**
- * Per-browser-profile settings: the session-flow cookie names, paths, redirect targets, and pluggable challenge
- * handlers, plus the token transport. The settings do not model cookie or header details themselves — token transport
- * is entirely the concern of the {@link TokenReader} and {@link TokenWriter}, which default to cookie-based
- * implementations. All fields have sensible defaults; override via {@link #builder()}.
+ * Per-browser-profile settings: the session-flow paths, cookie names, redirect targets, and challenge handlers, plus
+ * the token transport. Token transport is entirely the concern of the {@link TokenReader} and {@link TokenWriter},
+ * which default to cookies. All fields have sensible defaults; override via {@link #builder()}.
  *
  * @author Brian Pontarelli
  */
@@ -61,9 +60,10 @@ public record BrowserSettings(
     private Handler unavailableHandler = Defaults::unavailable;
 
     /**
-     * Validates the builder state and returns a new immutable {@link BrowserSettings}.
+     * Returns a new {@link BrowserSettings}, using the default cookie transport for any reader or writer that was not
+     * set.
      *
-     * @return The immutable settings.
+     * @return The settings.
      */
     public BrowserSettings build() {
       TokenReader reader = tokenReader != null ? tokenReader : new CookieTokenReader();

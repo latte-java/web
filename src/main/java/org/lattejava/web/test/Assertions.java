@@ -5,7 +5,7 @@
 package org.lattejava.web.test;
 
 /**
- * Internal helpers that format {@link AssertionError} messages so they match TestNG's wire format.
+ * Helpers that format {@link AssertionError} messages so they match TestNG's wire format.
  * <p>
  * IntelliJ IDEA's TestNG plugin (and the TestNG runner) recognize the {@code expected [...] but found [...]} message
  * pattern and offer a side-by-side comparison view when a test fails. By emitting the same string layout from this
@@ -30,7 +30,7 @@ public final class Assertions {
    *
    * @param actual   The actual value.
    * @param expected The expected value.
-   * @param message  An optional prefix describing what was being checked (may be {@code null}).
+   * @param message  An optional prefix describing what was being checked.
    */
   public static void assertEquals(Object actual, Object expected, String message) {
     if (areEqual(actual, expected)) {
@@ -43,7 +43,7 @@ public final class Assertions {
    * Asserts that the two values are not equal, throwing an {@link AssertionError} if they are.
    *
    * @param actual   The actual value.
-   * @param expected The value the actual is expected to differ from.
+   * @param expected The value the actual value must differ from.
    * @param message  An optional prefix describing what was being checked.
    */
   public static void assertNotEquals(Object actual, Object expected, String message) {
@@ -76,7 +76,7 @@ public final class Assertions {
   }
 
   /**
-   * Throws an {@link AssertionError} formatted as {@code <message> expected [<expected>] but found [<actual>]}. Used
+   * Throws an {@link AssertionError} formatted as {@code <message> - expected [<expected>] but found [<actual>]}. Used
    * when equality has already been determined by the caller (e.g. with a custom comparator).
    *
    * @param actual   The actual value.

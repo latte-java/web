@@ -8,18 +8,19 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 
 /**
- * A middleware that emits a strict set of HTTP security headers on every response. Headers are written to the response
- * before the chain is invoked, so error responses (404/405/5xx) also carry them; a downstream handler can override any
- * header by calling {@code setHeader} again.
+ * A middleware that emits a strict set of HTTP security headers on every response. Headers are written before the
+ * chain is invoked, so 404 and 5xx responses also carry them. A header already present on the response is left alone,
+ * and a downstream handler can override any header by calling {@code setHeader} again.
  * <p>
- * Instances are deeply immutable. Obtain one from {@link #defaults()} (every header at its most-secure value) or
- * {@link #empty()} (no headers at all), then derive variants with the per-header methods — each returns a new
- * {@code SecurityHeaders} with a single header changed; passing {@code null} clears that header. Because every field is
- * {@code final}, an instance is safely published to request threads regardless of when or how it is installed, and it
- * cannot be mutated after installation.
+ * Instances are immutable. Obtain one from {@link #defaults()} (every header at its most-secure value) or
+ * {@link #empty()} (no headers at all), then derive variants with the per-header methods. Each returns a new
+ * {@code SecurityHeaders} with a single header changed; passing {@code null} clears that header.
  * <p>
- * Caveat: this middleware does not run on {@code 405 Method Not Allowed} responses, which bypass the middleware chain.
- * Those responses carry only {@code Allow} and have no body, so the missing headers are not a meaningful gap.
+ * When the request host is {@code localhost} or {@code 127.0.0.1}, the {@code upgrade-insecure-requests} directive is
+ * removed from the Content-Security-Policy so local development over plain HTTP works.
+ * <p>
+ * This middleware does not run on {@code 405 Method Not Allowed} responses, which bypass the middleware chain. Those
+ * responses carry only {@code Allow} and have no body, so the missing headers are not a meaningful gap.
  *
  * @author Brian Pontarelli
  */

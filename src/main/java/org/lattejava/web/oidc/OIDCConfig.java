@@ -14,7 +14,10 @@ import org.lattejava.web.oidc.internal.Tools;
  * Configuration for an {@link OIDC} instance representing the IdP relationship. Use {@link #builder()} to construct.
  * <p>
  * Either {@code issuer} (for OIDC Discovery) or all four endpoint URLs (authorize, token, userinfo, jwks) must be
- * provided. Mixing is allowed; explicit endpoints override discovered ones.
+ * provided. Mixing is allowed; explicit endpoints override discovered ones. Discovery also fills in the logout and
+ * introspection endpoints when the IdP advertises them. {@code validateAccessToken=false} requires an introspection
+ * endpoint, and not every IdP advertises one (FusionAuth does not), so set {@code introspectionEndpoint} explicitly in
+ * that case.
  * <p>
  * Public-client mode ({@code publicClient=true}) is for clients that have no securely held {@code client_secret} —
  * native, desktop, CLI, console, and single-page apps. In this mode {@code clientSecret} may be omitted; the token
@@ -50,8 +53,8 @@ public record OIDCConfig(
 
   /**
    * A builder for {@link OIDCConfig}. All optional fields are pre-populated with sensible defaults; required fields
-   * (issuer or all four endpoints, clientId, clientSecret) must be set explicitly. Call {@link #build()} to produce an
-   * immutable config — validation runs at build time and throws on violation.
+   * (issuer or all four endpoints, clientId, and clientSecret for confidential clients) must be set explicitly. Call
+   * {@link #build()} to produce an immutable config — validation runs at build time and throws on violation.
    */
   public static class Builder {
     private URI authorizeEndpoint;
@@ -80,7 +83,9 @@ public record OIDCConfig(
      * Validates the builder state and returns a new immutable {@link OIDCConfig}.
      *
      * @return The immutable config.
-     * @throws IllegalArgumentException If any required field is missing or any constraint is violated.
+     * @throws IllegalArgumentException if any required field is missing or any constraint is violated.
+     * @throws IllegalStateException    if discovery fails, a required endpoint is still unresolved after discovery, or
+     *                                  {@code validateAccessToken} is {@code false} without an introspection endpoint.
      */
     public OIDCConfig build() {
       if (clientId == null || clientId.isBlank()) {
@@ -174,7 +179,7 @@ public record OIDCConfig(
      * body; PKCE remains required as the proof-of-possession. RFC 7662 introspection is incompatible with public
      * clients, so {@code validateAccessToken(false)} must not be combined with this setting.
      *
-     * @param value {@code true} to enable public-client mode; defaults to {@code false}.
+     * @param value {@code true} to enable public-client mode. Defaults to {@code false}.
      * @return This builder.
      */
     public Builder publicClient(boolean value) {

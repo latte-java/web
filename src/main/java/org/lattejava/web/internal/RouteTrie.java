@@ -23,12 +23,13 @@ public class RouteTrie {
   /**
    * Inserts a route into the trie.
    *
-   * @param pathSpec    the path specification (e.g., {@code /api/users/{id}})
-   * @param methods     the HTTP methods this route handles
-   * @param handler     the handler to invoke
-   * @param middlewares the per-route middlewares to run before the handler
-   * @throws IllegalArgumentException if the pathSpec is invalid or contains duplicate param names
-   * @throws IllegalStateException    if conflicting parameter names exist at the same trie position
+   * @param pathSpec    The path specification (e.g., {@code /api/users/{id}}).
+   * @param methods     The HTTP methods this route handles.
+   * @param handler     The handler to invoke.
+   * @param middlewares The per-route middlewares to run before the handler.
+   * @throws IllegalArgumentException if the pathSpec is invalid or contains duplicate parameter names.
+   * @throws IllegalStateException    if a different parameter name already exists at the same trie position, or a
+   *                                  method is already registered for the pathSpec.
    */
   public void insert(String pathSpec, Collection<String> methods, Handler handler, List<Middleware> middlewares) {
     var segments = PathParser.parseWithParameters(pathSpec);
@@ -68,12 +69,11 @@ public class RouteTrie {
   }
 
   /**
-   * Matches a request path and method against the trie.
+   * Matches a request path and method against the trie. A path with more than 256 segments is treated as not found.
    *
-   * @param path   The request path (e.g., {@code /api/users/42})
-   * @param method The HTTP method (e.g., {@code GET})
-   * @return The match outcome. All outcome variants carry the parsed path segments so the caller can reuse them (e.g.,
-   *     for prefix-scoped middleware resolution) without re-parsing.
+   * @param path   The request path (e.g., {@code /api/users/42}).
+   * @param method The HTTP method (e.g., {@code GET}).
+   * @return The match outcome.
    */
   public Outcome match(String path, String method) {
     List<String> segments = PathParser.parsePath(path);

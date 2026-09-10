@@ -11,14 +11,14 @@ import module org.lattejava.web;
 /**
  * A middleware that serves static files from the server's {@link HTTPContext#baseDir}.
  * <p>
- * The URL prefix determines which requests this middleware handles. The subdirectory (relative to {@code baseDir}) is
- * where the files live on disk. For example, with urlPrefix {@code /assets} and subdirectory {@code assets}, a request
- * to {@code /assets/app.css} will be served from {@code <baseDir>/assets/app.css}.
+ * The URL prefix determines which requests this middleware handles, and the subdirectory (relative to {@code baseDir})
+ * is where the files live on disk. For example, with URL prefix {@code /assets} and subdirectory {@code assets}, a
+ * request to {@code /assets/app.css} is served from {@code <baseDir>/assets/app.css}. A request under the prefix that
+ * does not resolve to a readable file gets a 404. Requests outside the prefix, or rejected by the filter, pass to the
+ * next middleware.
  * <p>
  * Path traversal is blocked by {@link HTTPContext#resolve(String)}, which returns {@code null} when a resolved path
  * escapes the baseDir.
- * <p>
- * Ported in spirit from Prime MVC's StaticResourceWorkflow, minus classpath loading.
  *
  * @author Brian Pontarelli
  */
@@ -53,8 +53,10 @@ public class StaticResources implements Middleware {
    *
    * @param urlPrefix     The URL prefix this middleware owns.
    * @param subdirectory  The subdirectory under {@code HTTPContext.baseDir} where files live.
-   * @param cacheDuration Cache duration for {@code Cache-Control}, {@code Expires}.
-   * @param filter        Optional per-request filter; may be null.
+   * @param cacheDuration The duration used for the {@code Cache-Control} and {@code Expires} headers.
+   * @param filter        The per-request filter, or {@code null} for none.
+   * @throws IllegalArgumentException if {@code urlPrefix} does not start with {@code /}, or is longer than one
+   *                                  character and ends with {@code /}.
    */
   public StaticResources(String urlPrefix, String subdirectory, Duration cacheDuration,
                          StaticResourceFilter filter) {
@@ -176,9 +178,9 @@ public class StaticResources implements Middleware {
   @FunctionalInterface
   public interface StaticResourceFilter {
     /**
-     * @param uri     The request URI.
+     * @param uri     The request path.
      * @param request The request.
-     * @return true to attempt static-file resolution; false to fall through.
+     * @return {@code true} to attempt static-file resolution, {@code false} to fall through to the next middleware.
      */
     boolean allow(String uri, HTTPRequest request);
   }
