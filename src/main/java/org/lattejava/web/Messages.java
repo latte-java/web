@@ -32,7 +32,9 @@ import org.lattejava.web.internal.*;
  * the constructor. Every locale variant of a file is consulted before moving up to the parent directory, so a message
  * defined for the page beats a translation defined for the site.
  * <p>
- * Files are UTF-8 {@link Properties} files. They are read on first use and cached for the life of the server.
+ * Files are UTF-8 {@link Properties} files. They are read on first use and cached. Every lookup checks the file's
+ * last-modified time and size, so a file that is edited, added, or deleted on disk takes effect on the next request
+ * without a restart.
  * <p>
  * This is a thin wrapper around the request, so it can be created wherever the request is available. Handlers and
  * middleware create one directly:
@@ -55,6 +57,17 @@ import org.lattejava.web.internal.*;
  * When arguments are supplied, the message is a {@link MessageFormat} pattern evaluated in the request's locale. When
  * no arguments are supplied, the message is returned verbatim, so plain text may contain apostrophes and braces without
  * escaping.
+ * <p>
+ * Messages can also be looked up without a request by naming the base directory, the request path, and the locale
+ * directly. This is how a test that drives a server through {@link org.lattejava.web.test.WebTest} fetches the text it
+ * expects to see, so the expected value comes from the same files the server reads:
+ * <pre>{@code
+ * Messages messages = new Messages(baseDir, "/admin/users/edit", Locale.GERMAN);
+ * new WebTest(port).withHeader("Accept-Language", "de")
+ *                  .get("/admin/users/edit")
+ *                  .assertBodyAs(new StringBodyAsserter(), s -> s.contains(messages.get("title")));
+ * }</pre>
+ * The same lookup rules apply, so the result is exactly what a handler for that path and locale would see.
  *
  * @author Brian Pontarelli
  */
@@ -64,8 +77,7 @@ public final class Messages {
    */
   public static final String DIRECTORY = "web/messages";
 
-  private static final ResourceBundle.Control CONTROL =
-      ResourceBundle.Control.getControl(ResourceBundle.Control.FORMAT_PROPERTIES);
+  private static final ResourceBundle.Control CONTROL = ResourceBundle.Control.getControl(ResourceBundle.Control.FORMAT_PROPERTIES);
   private static final String INDEX = "index";
   private static final String STORE_ATTRIBUTE = Messages.class.getName();
 
@@ -91,15 +103,64 @@ public final class Messages {
    */
   public Messages(HTTPRequest req, Locale locale) {
     Objects.requireNonNull(req, "req must not be null");
-    Objects.requireNonNull(locale, "locale must not be null");
     HTTPContext context = req.getContext();
     if (context == null) {
       throw new IllegalStateException("The request has no HTTPContext, so the messages directory cannot be located");
     }
 
+    this(store(context), req.getPath(), locale);
+  }
+
+  /**
+   * Looks up messages without a request, using the JVM's default locale. This matches what a request without an
+   * {@code Accept-Language} header sees. The base directory is {@code .}.
+   *
+   * @param path The request path whose messages to look up (for example {@code /admin/users/edit}).
+   */
+  public Messages(String path) {
+    this(Path.of("."), path, Locale.getDefault());
+  }
+
+  /**
+   * Looks up messages without a request. The base directory is {@code .}.
+   *
+   * @param path   The request path whose messages to look up (for example {@code /admin/users/edit}).
+   * @param locale The locale to look up messages for.
+   */
+  public Messages(String path, Locale locale) {
+    this(Path.of("."), path, locale);
+  }
+
+  /**
+   * Looks up messages without a request, using the JVM's default locale. This matches what a request without an
+   * {@code Accept-Language} header sees.
+   *
+   * @param baseDir The server's base directory (the value passed to {@link Web#baseDir(Path)}).
+   * @param path    The request path whose messages to look up (for example {@code /admin/users/edit}).
+   */
+  public Messages(Path baseDir, String path) {
+    this(baseDir, path, Locale.getDefault());
+  }
+
+  /**
+   * Looks up messages without a request. The files are read from {@value #DIRECTORY} under the base directory, the same
+   * place the server reads them, and the same lookup rules apply.
+   *
+   * @param baseDir The server's base directory (the value passed to {@link Web#baseDir(Path)}).
+   * @param path    The request path whose messages to look up (for example {@code /admin/users/edit}).
+   * @param locale  The locale to look up messages for.
+   */
+  public Messages(Path baseDir, String path, Locale locale) {
+    Objects.requireNonNull(baseDir, "baseDir must not be null");
+    this(new MessageStore(baseDir.resolve(DIRECTORY)), path, locale);
+  }
+
+  private Messages(MessageStore store, String path, Locale locale) {
+    Objects.requireNonNull(path, "path must not be null");
+    Objects.requireNonNull(locale, "locale must not be null");
     this.locale = locale;
-    this.path = req.getPath();
-    this.chain = resolve(store(context), path, locale);
+    this.path = path;
+    this.chain = resolve(store, path, locale);
   }
 
   /**

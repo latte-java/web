@@ -60,8 +60,7 @@ public class Web implements AutoCloseable {
   }
 
   /**
-   * Sets the base directory for this Web's HTTP context. If not called, the default from the underlying HTTP server is
-   * used (typically the current working directory).
+   * Sets the base directory for this Web's HTTP context. If not called, then {@code .} is used.
    *
    * @param baseDir The base directory for file resolution.
    * @return This Web instance for chaining.

@@ -9,6 +9,7 @@ import module org.lattejava.http;
 import module org.lattejava.web;
 import module org.testng;
 
+import java.nio.file.Files;
 import java.util.Objects;
 
 import static org.testng.Assert.*;
@@ -54,14 +55,74 @@ public class MessagesTest extends BaseWebTest {
     try (var web = new Web()) {
       web.baseDir(PROJECT_DIR)
          .get("/", (req, res) -> {
-           assertThrows(NullPointerException.class, () -> new Messages(null));
+           assertThrows(NullPointerException.class, () -> new Messages((HTTPRequest) null));
            assertThrows(NullPointerException.class, () -> new Messages(req, null));
+           assertThrows(NullPointerException.class, () -> new Messages((String) null));
+           assertThrows(NullPointerException.class, () -> new Messages((String) null, null));
+           assertThrows(NullPointerException.class, () -> new Messages((Path) null, null));
+           assertThrows(NullPointerException.class, () -> new Messages(null, null, null));
            res.setStatus(200);
          })
          .start(PORT);
 
       new WebTest(PORT).get("/")
                        .assertStatus(200);
+    }
+  }
+
+  @Test
+  public void constructor_withoutRequest() {
+    // Same lookup rules as a request: locale chain within a level, then the parent levels
+    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.ENGLISH).get("save"), "Save");
+    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMAN).get("save"), "Speichern");
+    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMANY).get("save"), "Speichern (DE)");
+    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMANY).get("title"), "Edit User");
+    assertEquals(new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMANY).get("shared"), "admin-de");
+    assertEquals(new Messages(PROJECT_DIR, "/admin/users/", Locale.ENGLISH).get("title"), "Users");
+    assertEquals(new Messages(PROJECT_DIR, "/admin/users", Locale.ENGLISH).get("title"), "Admin");
+    assertEquals(new Messages(PROJECT_DIR, "/", Locale.US).get("greeting", "Brian"), "Hello Brian");
+    assertEquals(new Messages(PROJECT_DIR, "/", Locale.GERMANY).get("count", 1234.5), "Total 1.234,5");
+
+    // find, has, and locale
+    Messages messages = new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMAN);
+    assertNull(messages.find("nope"));
+    assertTrue(messages.has("save"));
+    assertFalse(messages.has("nope"));
+    assertEquals(messages.locale(), Locale.GERMAN);
+    assertThrows(MissingMessageException.class, () -> messages.get("nope"));
+
+    // The two-argument form uses the JVM default locale
+    Messages defaulted = new Messages(PROJECT_DIR, "/admin/users/edit");
+    assertEquals(defaulted.locale(), Locale.getDefault());
+    assertEquals(defaulted.get("save"), new Messages(PROJECT_DIR, "/admin/users/edit", Locale.getDefault()).get("save"));
+
+    // A missing directory defines nothing
+    assertNull(new Messages(PROJECT_DIR.resolve("nowhere"), "/", Locale.ENGLISH).find("title"));
+
+    // Nulls
+    assertThrows(NullPointerException.class, () -> new Messages(null, "/", Locale.ENGLISH));
+    assertThrows(NullPointerException.class, () -> new Messages(PROJECT_DIR, null, Locale.ENGLISH));
+    assertThrows(NullPointerException.class, () -> new Messages(PROJECT_DIR, "/", null));
+    assertThrows(NullPointerException.class, () -> new Messages(PROJECT_DIR, null));
+  }
+
+  @Test
+  public void constructor_withoutRequestMatchesServer() {
+    try (var _ = messagesServer()) {
+      // The intended use: fetch the expected text from the files and compare it to what the server rendered
+      Messages german = new Messages(PROJECT_DIR, "/admin/users/edit", Locale.GERMAN);
+      Messages defaulted = new Messages(PROJECT_DIR, "/admin/users/edit");
+      var tester = new WebTest(PORT);
+      tester.withHeader("Accept-Language", "de")
+            .withHeader("X-Key", "save")
+            .get("/admin/users/edit")
+            .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo(german.get("save")))
+            .assertHeader("X-Title", german.get("title"))
+            .reset(ResetItem.Request);
+      tester.withHeader("X-Key", "save")
+            .get("/admin/users/edit")
+            .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo(defaulted.get("save")))
+            .assertHeader("X-Locale", defaulted.locale().toString());
     }
   }
 
@@ -330,6 +391,59 @@ public class MessagesTest extends BaseWebTest {
 
       new WebTest(PORT).get("/")
                        .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo("false:null"));
+    }
+  }
+
+  @Test
+  public void reload() throws IOException {
+    Path baseDir = Files.createTempDirectory("messages");
+    try (var web = new Web()) {
+      Path file = baseDir.resolve(Messages.DIRECTORY).resolve("index.properties");
+      Files.createDirectories(file.getParent());
+      Files.writeString(file, "title=One\n");
+
+      web.baseDir(baseDir)
+         .get("/", (req, res) -> respond(res, String.valueOf(new Messages(req).find("title"))))
+         .start(PORT);
+
+      var tester = new WebTest(PORT);
+      tester.get("/")
+            .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo("One"))
+            .reset(ResetItem.Request);
+
+      // Same size, newer time
+      Files.writeString(file, "title=Two\n");
+      Files.setLastModifiedTime(file, FileTime.from(Instant.now().plusSeconds(5)));
+      tester.get("/")
+            .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo("Two"))
+            .reset(ResetItem.Request);
+
+      // Different size
+      Files.writeString(file, "title=Three\n");
+      tester.get("/")
+            .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo("Three"))
+            .reset(ResetItem.Request);
+
+      // Deleted
+      Files.delete(file);
+      tester.get("/")
+            .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo("null"))
+            .reset(ResetItem.Request);
+
+      // Recreated
+      Files.writeString(file, "title=Four\n");
+      tester.get("/")
+            .assertBodyAs(new StringBodyAsserter(), s -> s.equalTo("Four"));
+    } finally {
+      try (var paths = Files.walk(baseDir)) {
+        paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+          try {
+            Files.delete(path);
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        });
+      }
     }
   }
 
